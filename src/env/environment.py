@@ -8,12 +8,6 @@ from lidapy import Task
 from lidapy.modules import Environment
 import numpy as np
 
-# Topic definitions
-board_state_topic = lidapy.Topic('oxplayer/env/board')
-action_topic = lidapy.Topic('oxplayer/player2/action')
-turn_topic = lidapy.Topic('oxplayer/env/turn')
-pain_topics = [lidapy.Topic('oxplayer/player1/pain'),
-               lidapy.Topic('oxplayer/player2/pain')]
 BLANK = -1
 PLAYER1 = 0
 PLAYER2 = 1
@@ -65,8 +59,9 @@ class Board(object):
 
     def reset(self):
         self._board = [BLANK]*9
+        self._winner = None
 
-    def iswinning(self):
+    def haswon(self):
 
         def are_marks_same(marks, mark):
             return all([x == mark for x in marks])
@@ -93,8 +88,11 @@ class Board(object):
     def __iter__(self):
         return iter(self._board)
 
-    def __str__(self):
+    def __repr__(self):
         return str(self._board)
+
+    def __str__(self):
+        return self.board_string()
 
     def board_string(self):
         board_template = '\n' \
