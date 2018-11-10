@@ -60,12 +60,13 @@ class Environment(Module):
 
     def _make_move(self, pos, mark):
         if self.move_possible(pos):
-                self._board[pos] = mark
-                return True
+            self._board[pos] = mark
+            return True
         return False
 
     def __call__(self, action):
-        self._make_move(action[1], action[0])
+        if action:
+            self._make_move(action[1], action[0])
 
     def __next__(self):
         return self._board
@@ -102,6 +103,7 @@ class AttentionCodelet(Module):
             coalition = codelet(module)
             coalitions.append(coalition)
         return coalitions
+
 
 class StructureBuildingCodelet(Module):
     def __init__(self):
