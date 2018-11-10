@@ -1,7 +1,5 @@
 #!/usr/bin/python
 #  coding=utf-8
-from functools import partial
-import numpy as np
 
 BLANK = -1
 PLAYER1 = 0
@@ -102,82 +100,4 @@ class Board(object):
 
 def first_blank(board):
     return Board(board).first_blank
-
-
-class OXPlayerEnvironment(Environment):
-
-    def __init__(self, tasks=None):
-        super(OXPlayerEnvironment, self).__init__(tasks=tasks)
-        self._board = Board.blank_board()
-        self._turn = PLAYER1
-        self._player1 = partial(np.random.choice, a=self._board.blanks)
-        self._player2 = OXPlayerEnvironment.receive_move
-
-        self.builtin_tasks = [Task(name='update_env', callback=self.update),
-                              Task(name='publish_board', callback=self.publish_board),
-                              Task(name='publish_turn', callback=self.publish_turn)]
-
-    def publish_board(self):
-        board_state_topic.send(str(self._board))
-        lidapy.loginfo('Published from Environment to '+str(board_state_topic)+':'+str(self._board))
-
-    def publish_turn(self):
-        turn_topic.send(self._turn)
-        lidapy.loginfo('Published from Environment to '+str(turn_topic)+':'+str(self._turn))
-
-    def _is_end(self):
-        if self._board.iswinning():
-            return True
-        if BLANK not in self._board:
-            return True
-        return False
-
-    @staticmethod
-    def receive_move():
-        msg = action_topic.receive(timeout=1)
-        move = INVALID_MOVE
-        if msg is not None:
-            lidapy.loginfo('Environment received:'+str(msg))
-            move = int(msg)
-        return move
-
-    def _make_move(self, pos):
-        if -1 < pos < 9 and self._board[pos] == -1:
-                self._board[pos] = 'X' if self._turn == 0 else 'O'
-                return True
-        return False
-
-    def board_string(self):
-        return self._board.board_string()
-
-    def move_possible(self, move):
-        return 0 <= move < 9 and self._board.is_blank(move)
-
-    def update(self):
-        if self._is_end():
-            pain_topics[self._board.looser].send(PAIN)
-            self._turn = self._board.winner
-            self._board.reset()
-
-        if self._turn == PLAYER1:
-            move = self._player1(), PLAYER1
-        else:
-            move = self._player2(), PLAYER2  # receive_action should be bound to an instance
-
-        if self.move_possible(move[0]) and self._turn == move[1]:
-            if self._make_move(move[0]):
-                self._turn = PLAYER2 if self._turn == PLAYER1 else PLAYER1
-
-        lidapy.loginfo(self.board_string())
-        print('running')
-
-
-if __name__ == '__main__':
-
-    agent_config = Config()
-    agent_config.set_param('rate_in_hz', 1)
-    lidapy.init(config=agent_config)
-
-    ox_env = OXPlayerEnvironment()
-    ox_env.start()
 
