@@ -1,11 +1,6 @@
 #!/usr/bin/python
 #  coding=utf-8
 from functools import partial
-
-import lidapy
-from lidapy import Config
-from lidapy import Task
-from lidapy.modules import Environment
 import numpy as np
 
 BLANK = -1
@@ -147,8 +142,7 @@ class OXPlayerEnvironment(Environment):
         return move
 
     def _make_move(self, pos):
-        if -1 < pos < 9:
-            if self._board[pos] == -1:
+        if -1 < pos < 9 and self._board[pos] == -1:
                 self._board[pos] = 'X' if self._turn == 0 else 'O'
                 return True
         return False
