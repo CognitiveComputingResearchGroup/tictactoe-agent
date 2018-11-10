@@ -90,6 +90,14 @@ class SensoryMemory(Module):
     def __init__(self):
         super(SensoryMemory, self).__init__()
 
+        self.sensory_memory = []
+
+    def __call__(self, *args, **kwargs):
+        self.sensory_memory.append(args[0])  # TODO: check correct?
+
+    def __next__(self):
+        return self.sensory_memory[-1]
+
 
 class AttentionCodelet(Module):
     def __init__(self):
