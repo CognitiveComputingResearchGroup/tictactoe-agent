@@ -51,11 +51,38 @@ class Module(object):
 class Environment(Module):
     def __init__(self):
         super(Environment, self).__init__()
+        from src.env.environment import Board
+        self._board = Board.blank_board()
+        self._mark = 'X'
+
+    def move_possible(self, move):
+        return 0 <= move < 9 and self._board.is_blank(move)
+
+    def _make_move(self, pos, mark):
+        if self.move_possible(pos):
+                self._board[pos] = mark
+                return True
+        return False
+
+    def __call__(self, action):
+        self._make_move(action[1], action[0])
+
+    def __next__(self):
+        return self._board
 
 
 class PerceptualAssociativeMemory(Module):
     def __init__(self):
         super(PerceptualAssociativeMemory, self).__init__()
+
+        self.pam_contents = []
+
+    def __call__(self, cue_content):
+        content = self.cue(cue_content)
+        return (cue_content, content)
+
+    def cue(self, cue_content):
+        return 'happy_dummy'
 
 
 class SensoryMemory(Module):
@@ -67,6 +94,14 @@ class AttentionCodelet(Module):
     def __init__(self):
         super(AttentionCodelet, self).__init__()
 
+        self.codelets = []
+
+    def __call__(self, module):
+        coalitions = []
+        for codelet in self.codelets:
+            coalition = codelet(module)
+            coalitions.append(coalition)
+        return coalitions
 
 class StructureBuildingCodelet(Module):
     def __init__(self):
