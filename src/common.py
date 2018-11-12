@@ -1,6 +1,6 @@
 class Module(object):
     def __init__(self, *args, **kwargs):
-        super(Module, self).__init__()
+        super().__init__()
 
     def __call__(self, *args, **kwargs):
         """
@@ -50,7 +50,7 @@ class Module(object):
 
 class Environment(Module):
     def __init__(self):
-        super(Environment, self).__init__()
+        super().__init__()
         from src.env.environment import Board
         self._board = Board.blank_board()
         self._mark = 'X'
@@ -74,7 +74,16 @@ class Environment(Module):
 
 class PerceptualAssociativeMemory(Module):
     def __init__(self):
-        super(PerceptualAssociativeMemory, self).__init__()
+        super().__init__()
+
+        self.pam_contents = []
+
+    def __call__(self, cue_content):
+        content = self.cue(cue_content)
+        return (cue_content, content)
+
+    def cue(self, cue_content):
+        return 'happy_dummy'
 
         self.pam_contents = []
 
@@ -88,7 +97,15 @@ class PerceptualAssociativeMemory(Module):
 
 class SensoryMemory(Module):
     def __init__(self):
-        super(SensoryMemory, self).__init__()
+        super().__init__()
+
+        self.sensory_memory = []
+
+    def __call__(self, *args, **kwargs):
+        self.sensory_memory.append(args[0])
+
+    def __next__(self):
+        return self.sensory_memory[-1]
 
         self.sensory_memory = []
 
@@ -101,7 +118,16 @@ class SensoryMemory(Module):
 
 class AttentionCodelet(Module):
     def __init__(self):
-        super(AttentionCodelet, self).__init__()
+        super().__init__()
+
+        self.codelets = []
+
+    def __call__(self, module):
+        coalitions = []
+        for codelet in self.codelets:
+            coalition = codelet(module)
+            coalitions.append(coalition)
+        return coalitions
 
         self.codelets = []
 
@@ -115,12 +141,12 @@ class AttentionCodelet(Module):
 
 class StructureBuildingCodelet(Module):
     def __init__(self):
-        super(StructureBuildingCodelet, self).__init__()
+        super().__init__()
 
 
 class Workspace(Module):
     def __init__(self):
-        super(Workspace, self).__init__()
+        super().__init__()
 
         self.workspace_content = []
 
@@ -136,4 +162,24 @@ class Workspace(Module):
 
 class CueingProcess(Module):
     def __init__(self):
-        super(CueingProcess, self).__init__()
+        super().__init__()
+
+
+class GlobalWorkspace(Module):
+    def __int__(self):
+        super().__init__()
+
+
+class ProceduralMemory(Module):
+    def __int__(self):
+        super().__init__()
+
+
+class ActionSelection(Module):
+    def __int__(self):
+        super().__init__()
+
+
+class SensoryMotorMemory(Module):
+    def __int__(self):
+        super().__init__()
