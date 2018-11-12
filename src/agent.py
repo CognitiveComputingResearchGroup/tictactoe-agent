@@ -31,7 +31,7 @@ def running(step, last=None):
 
 def run(n=None):
     """
-    Main control loop of agent.  Runs for n cognitive cycles.  If n is specified, it will run forever.
+    Main control loop of agent.  Runs for n cognitive cycles.  If n is not specified, it will run forever.
     :param n: number of cognitive cycles to execute
     """
     count = 0
