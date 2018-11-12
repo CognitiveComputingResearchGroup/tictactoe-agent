@@ -85,15 +85,6 @@ class PerceptualAssociativeMemory(Module):
     def cue(self, cue_content):
         return 'happy_dummy'
 
-        self.pam_contents = []
-
-    def __call__(self, cue_content):
-        content = self.cue(cue_content)
-        return (cue_content, content)
-
-    def cue(self, cue_content):
-        return 'happy_dummy'
-
 
 class SensoryMemory(Module):
     def __init__(self):
@@ -107,27 +98,10 @@ class SensoryMemory(Module):
     def __next__(self):
         return self.sensory_memory[-1]
 
-        self.sensory_memory = []
-
-    def __call__(self, *args, **kwargs):
-        self.sensory_memory.append(args[0])  # TODO: check correct?
-
-    def __next__(self):
-        return self.sensory_memory[-1]
-
 
 class AttentionCodelet(Module):
     def __init__(self):
         super().__init__()
-
-        self.codelets = []
-
-    def __call__(self, module):
-        coalitions = []
-        for codelet in self.codelets:
-            coalition = codelet(module)
-            coalitions.append(coalition)
-        return coalitions
 
         self.codelets = []
 
