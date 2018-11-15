@@ -153,6 +153,15 @@ class ProceduralMemory(Module):
 class ActionSelection(Module):
     def __int__(self):
         super().__init__()
+        self.behaviors = []
+
+    def __call__(self, behavior):
+        self.behaviors.append(behavior)
+
+    def __next__(self):
+        maximally_active_behavior = sorted(self.behaviors, key=lambda behavior: behavior.activation)[-1]
+        expectation_codelet = AttentionCodelet(maximally_active_behavior.result)
+        return maximally_active_behavior, expectation_codelet
 
 
 class SensoryMotorMemory(Module):
