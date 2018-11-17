@@ -1,3 +1,6 @@
+from random import random
+
+
 class Module(object):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -117,8 +120,19 @@ class AttentionCodelet(Module):
 
 
 class StructureBuildingCodelet(Module):
-    def __init__(self):
+    def __init__(self, is_match=lambda x: True, action=lambda x: x):
         super().__init__()
+
+        self.is_match = is_match
+        self.action = action
+        self.structures = []
+
+    def __call__(self, workspace):
+        new_structures = map(self.action, filter(self.is_match, workspace))
+        self.structures.extend(new_structures)
+
+    def __next__(self):
+        return self.structures.pop()
 
 
 class Workspace(Module):
@@ -141,15 +155,51 @@ class CueingProcess(Module):
     def __init__(self):
         super().__init__()
 
+        self.cued_content = []
+
+    def __call__(self, content, module):
+        # cue module
+        module(content)
+
+        # receive activated content from cued module
+        self.cued_content.append(next(module))
+
+    def __next__(self):
+        return self.cued_content.pop()
+
 
 class GlobalWorkspace(Module):
-    def __int__(self):
+    def __init__(self):
         super().__init__()
+
+        self.coalitions = []
+
+    def __call__(self, coalition):
+        self.coalitions.append(coalition)
+
+    def __next__(self):
+        return self.coalitions[-1]
+
+
+class Scheme(object):
+    def __init__(self, context=None, action=None, result=None):
+        self.context = context
+        self.action = action
+        self.result = result
 
 
 class ProceduralMemory(Module):
-    def __int__(self):
+    def __init__(self):
         super().__init__()
+
+        self.schemes = [Scheme(action=(pos, 'X')) for pos in range(9)]
+
+    # ignore conscious broadcast for now
+    def __call__(self, broadcast):
+        pass
+
+    def __next__(self):
+        return random.choice(self.schemes)
 
 
 class ActionSelection(Module):
@@ -167,5 +217,13 @@ class ActionSelection(Module):
 
 
 class SensoryMotorMemory(Module):
-    def __int__(self):
+    def __init__(self):
         super().__init__()
+
+        self.motor_plans = []
+
+    def __call__(self, action):
+        self.motor_plans = action
+
+    def __next__(self):
+        return self.motor_plans.pop()
