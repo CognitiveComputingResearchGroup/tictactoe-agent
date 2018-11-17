@@ -120,11 +120,11 @@ class AttentionCodelet(Module):
 
 
 class StructureBuildingCodelet(Module):
-    def __init__(self, is_match=lambda x: True, tranform=lambda x: x):
+    def __init__(self, is_match=lambda x: True, transform=lambda x: x):
         super().__init__()
 
         self.is_match = is_match
-        self.transform = tranform
+        self.transform = transform
         self.structures = []
 
     def __call__(self, workspace):
