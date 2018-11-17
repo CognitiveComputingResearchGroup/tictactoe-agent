@@ -12,7 +12,7 @@ cue = CueingProcess()
 global_workspace = GlobalWorkspace()
 procedural_memory = ProceduralMemory()
 action_selection = ActionSelection()
-sensory_motor_memory = SensoryMotorMemory()
+sensory_motor_system = SensoryMotorSystem()
 
 sb_codelets = [StructureBuildingCodelet()]
 attn_codelets = [AttentionCodelet()]
@@ -68,17 +68,17 @@ def run(n=None):
         action_selection(next(procedural_memory))
 
         # Retrieve next action and associated expectation codelet from action selection
-        action, exp_codelet = next(action_selection)
+        behavior, exp_codelet = next(action_selection)
 
         # Add expectation codelet to set of attention codelets
         if exp_codelet:
             attn_codelets.append(exp_codelet)
 
         # Update sensory motor memory based on selected action
-        sensory_motor_memory(action)
+        sensory_motor_system(behavior)
 
-        # Update environment from sensory motor memory's motor plan
-        environment(next(sensory_motor_memory))
+        # Update environment from sensory motor system's motor plan
+        environment(next(sensory_motor_system))
 
         count += 1
 
