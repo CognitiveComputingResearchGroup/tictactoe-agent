@@ -1,3 +1,6 @@
+from random import random
+
+
 class Module(object):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -114,8 +117,21 @@ class AttentionCodelet(Module):
 
 
 class StructureBuildingCodelet(Module):
-    def __init__(self):
+    def __init__(self, is_match=lambda x: True, tranform=lambda x: x):
         super().__init__()
+
+        self.is_match = is_match
+        self.transform = tranform
+        self.structures = []
+
+    def __call__(self, workspace):
+        new_structures = map(self.transform, filter(self.is_match, workspace))
+        self.structures.extend(new_structures)
+
+    def __next__(self):
+        structures = self.structures
+        self.structures = []
+        return structures
 
 
 class Workspace(Module):
@@ -125,7 +141,10 @@ class Workspace(Module):
         self.workspace_content = []
 
     def __call__(self, content):
-        self.workspace_content.append(content)
+        if isinstance(content, list):
+            self.workspace_content.extend(content)
+        else:
+            self.workspace_content.append(content)
 
     def __next__(self):
         return self.workspace_content[-1]
@@ -138,15 +157,56 @@ class CueingProcess(Module):
     def __init__(self):
         super().__init__()
 
+        self.cued_content = []
+
+    def __call__(self, content, module):
+        # cue module
+        module(content)
+
+        # receive activated content from cued module
+        self.cued_content.append(content)
+
+    def __next__(self):
+        cued_content = self.cued_content
+        self.cued_content = []
+        return cued_content
+
 
 class GlobalWorkspace(Module):
-    def __int__(self):
+    def __init__(self):
         super().__init__()
+
+        self.coalitions = []
+
+    def __call__(self, coalition):
+        if isinstance(coalition, list):
+            self.coalitions.extend(coalition)
+        else:
+            self.coalitions.append(coalition)
+
+    def __next__(self):
+        return self.coalitions[-1]
+
+
+class Scheme(object):
+    def __init__(self, context=None, action=None, result=None):
+        self.context = context
+        self.action = action
+        self.result = result
 
 
 class ProceduralMemory(Module):
-    def __int__(self):
+    def __init__(self):
         super().__init__()
+
+        self.schemes = [Scheme(action=(pos, 'X')) for pos in range(9)]
+
+    # ignore conscious broadcast for now
+    def __call__(self, broadcast):
+        pass
+
+    def __next__(self):
+        return random.choice(self.schemes)
 
 
 class ActionSelection(Module):
@@ -154,6 +214,16 @@ class ActionSelection(Module):
         super().__init__()
 
 
-class SensoryMotorMemory(Module):
-    def __int__(self):
+class SensoryMotorSystem(Module):
+    def __init__(self):
         super().__init__()
+
+        self.motor_plans = []
+
+    def __call__(self, behavior):
+        self.motor_plans.append(behavior.action)
+
+    def __next__(self):
+        motor_plans = self.motor_plans
+        self.motor_plans = []
+        return motor_plans
