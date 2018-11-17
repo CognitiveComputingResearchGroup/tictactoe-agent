@@ -30,7 +30,7 @@ class TestCueingProcess(TestCase):
             for expected in range(10):
                 c(expected, m)  # Perform cue operation
                 actual = next(c)
-                self.assertEqual(expected, actual)
+                self.assertListEqual([expected], actual)
         except Exception as e:
             self.fail(e)
 
