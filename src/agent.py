@@ -82,6 +82,8 @@ def run(n=None):
 
         count += 1
 
+    return count
+
 
 if __name__ == '__main__':
     run(N_STEPS)
