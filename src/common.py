@@ -1,4 +1,4 @@
-from random import random
+import random
 
 
 class Module(object):
@@ -8,24 +8,6 @@ class Module(object):
     def __call__(self, *args, **kwargs):
         """
         Update internal state of module using supplied arguments.
-        """
-        raise NotImplementedError()
-
-    def __getitem__(self, key):
-        """
-        Retrieve the specified item.
-
-        A KeyError is raised if the key doesn't exist.
-        A TypeError is raised if the key is of an incorrect type.
-        """
-        raise NotImplementedError()
-
-    def __delitem__(self, key):
-        """
-        Removes the specified item.
-
-        A KeyError is raised if the key doesn't exist.
-        A TypeError is raised if the key is of an incorrect type.
         """
         raise NotImplementedError()
 
@@ -41,12 +23,6 @@ class Module(object):
     def __next__(self):
         """
         Returns next module state.  Corresponds to the next item that would be returned from iterating over this module.
-        """
-        raise NotImplementedError()
-
-    def __contains__(self, item):
-        """
-        Returns True if item is in module; False otherwise.
         """
         raise NotImplementedError()
 
@@ -199,17 +175,17 @@ class Scheme(object):
 
 
 class ProceduralMemory(Module):
-    def __init__(self):
+    def __init__(self, initial_schemes=None):
         super().__init__()
 
-        self.schemes = [Scheme(action=(pos, 'X')) for pos in range(9)]
+        self.schemes = [] if initial_schemes is None else list(initial_schemes)
 
     # ignore conscious broadcast for now
     def __call__(self, broadcast):
         pass
 
     def __next__(self):
-        return random.choice(self.schemes)
+        return None if len(self.schemes) == 0 else random.choice(self.schemes)
 
 
 class ActionSelection(Module):
