@@ -10,7 +10,7 @@ workspace = Workspace()
 pam = PerceptualAssociativeMemory()
 cue = CueingProcess()
 global_workspace = GlobalWorkspace()
-procedural_memory = ProceduralMemory()
+procedural_memory = ProceduralMemory(initial_schemes=[Scheme(action=(pos, 'X')) for pos in range(9)])
 action_selection = ActionSelection()
 sensory_motor_system = SensoryMotorSystem()
 
