@@ -170,6 +170,8 @@ class Scheme(object):
         self.action = action
         self.result = result
 
+        self.activation = 0.0
+
 
 class ProceduralMemory(Module):
     def __init__(self, initial_schemes=None):
