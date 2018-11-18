@@ -8,8 +8,8 @@ class TestStructureBuildingCodelet(TestCase):
         try:
             c = StructureBuildingCodelet()
             c = StructureBuildingCodelet(is_match=lambda x: False)
-            c = StructureBuildingCodelet(tranform=lambda x: x + 1)
-            c = StructureBuildingCodelet(is_match=lambda x: False, tranform=lambda x: x + 1)
+            c = StructureBuildingCodelet(transform=lambda x: x + 1)
+            c = StructureBuildingCodelet(is_match=lambda x: False, transform=lambda x: x + 1)
         except Exception as e:
             self.fail(e)
 
@@ -33,7 +33,7 @@ class TestStructureBuildingCodelet(TestCase):
 
         # With custom is_match and action
         try:
-            c = StructureBuildingCodelet(is_match=lambda x: x < 3, tranform=lambda x: x + 1)
+            c = StructureBuildingCodelet(is_match=lambda x: x < 3, transform=lambda x: x + 1)
             w = Workspace()
 
             # Add content to the Workspace
@@ -56,7 +56,7 @@ class TestStructureBuildingCodelet(TestCase):
                 w(i)
 
             for v in range(10):
-                c = StructureBuildingCodelet(is_match=lambda x: x == v, tranform=lambda x: x + 1)
+                c = StructureBuildingCodelet(is_match=lambda x: x == v, transform=lambda x: x + 1)
                 c(w)
                 actual = next(c)
                 self.assertEqual([v + 1], actual)
