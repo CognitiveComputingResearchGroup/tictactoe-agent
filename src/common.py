@@ -162,7 +162,7 @@ class ActionSelection(Module):
 
     def __next__(self):
         maximally_active_behavior = sorted(self.behaviors, key=lambda behavior: behavior.activation)[-1]
-        expectation_codelet = AttentionCodelet(maximally_active_behavior.result)
+        expectation_codelet = AttentionCodelet(lambda x: x in maximally_active_behavior.result or x == maximally_active_behavior.result)
         return maximally_active_behavior, expectation_codelet
 
 
