@@ -100,18 +100,20 @@ class SensoryMemory(Module):
 
 
 class AttentionCodelet(Module):
-    def __init__(self, content=None):
+    def __init__(self, is_match=lambda x: True):
         super().__init__()
-        self._sought_content=content
+        self._match_content = is_match
         self.coalition = []
 
     def __call__(self, module):
         for content in module:
-            if self.sought_content in content or self.sought_content == content:
+            if self._match_content(content):
                 self.coalition.append(content)
 
     def __next__(self):
-        return self.coalition
+        coalition = self.coalition
+        self.coalition = []
+        return coalition
 
 
 class StructureBuildingCodelet(Module):
