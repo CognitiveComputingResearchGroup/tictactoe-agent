@@ -79,17 +79,20 @@ class SensoryMemory(Module):
 
 
 class AttentionCodelet(Module):
-    def __init__(self):
+    def __init__(self, is_match=lambda x: True):
         super().__init__()
-
-        self.codelets = []
+        self._match_content = is_match
+        self.coalition = []
 
     def __call__(self, module):
-        coalitions = []
-        for codelet in self.codelets:
-            coalition = codelet(module)
-            coalitions.append(coalition)
-        return coalitions
+        for content in module:
+            if self._match_content(content):
+                self.coalition.append(content)
+
+    def __next__(self):
+        coalition = self.coalition
+        self.coalition = []
+        return coalition
 
 
 class StructureBuildingCodelet(Module):
@@ -190,6 +193,15 @@ class ProceduralMemory(Module):
 class ActionSelection(Module):
     def __int__(self):
         super().__init__()
+        self.behaviors = []
+
+    def __call__(self, behavior):
+        self.behaviors.append(behavior)
+
+    def __next__(self):
+        maximally_active_behavior = sorted(self.behaviors, key=lambda behavior: behavior.activation)[-1]
+        expectation_codelet = AttentionCodelet(lambda x: x in maximally_active_behavior.result or x == maximally_active_behavior.result)
+        return maximally_active_behavior, expectation_codelet
 
 
 class SensoryMotorSystem(Module):
