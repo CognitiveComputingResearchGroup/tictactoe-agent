@@ -191,7 +191,7 @@ class ProceduralMemory(Module):
 
 
 class ActionSelection(Module):
-    def __int__(self):
+    def __init__(self):
         super().__init__()
         self.behaviors = []
 
