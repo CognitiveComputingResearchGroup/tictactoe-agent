@@ -43,9 +43,10 @@ class Environment(Module):
             return True
         return False
 
-    def __call__(self, action):
-        if action:
-            self._make_move(action[1], action[0])
+    def __call__(self, motor_plan):
+        for action in motor_plan:
+            if action is not None:
+                self._make_move(action[0], action[1])
 
     def __next__(self):
         return self._board
@@ -191,7 +192,7 @@ class ProceduralMemory(Module):
 
 
 class ActionSelection(Module):
-    def __int__(self):
+    def __init__(self):
         super().__init__()
         self.behaviors = []
 
@@ -200,7 +201,8 @@ class ActionSelection(Module):
 
     def __next__(self):
         maximally_active_behavior = sorted(self.behaviors, key=lambda behavior: behavior.activation)[-1]
-        expectation_codelet = AttentionCodelet(lambda x: x in maximally_active_behavior.result or x == maximally_active_behavior.result)
+        expectation_codelet = AttentionCodelet(
+            lambda x: x in maximally_active_behavior.result or x == maximally_active_behavior.result)
         return maximally_active_behavior, expectation_codelet
 
 
@@ -208,12 +210,12 @@ class SensoryMotorSystem(Module):
     def __init__(self):
         super().__init__()
 
-        self.motor_plans = []
+        self.motor_plan = []
 
     def __call__(self, behavior):
-        self.motor_plans.append(behavior.action)
+        self.motor_plan.append(behavior.action)
 
     def __next__(self):
-        motor_plans = self.motor_plans
-        self.motor_plans = []
+        motor_plans = self.motor_plan
+        self.motor_plan = []
         return motor_plans
