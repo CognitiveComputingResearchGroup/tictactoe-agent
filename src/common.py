@@ -30,7 +30,7 @@ class Module(object):
 class Environment(Module):
     def __init__(self):
         super().__init__()
-        from src.env.environment import Board
+        from env.environment import Board
         self._board = Board.blank_board()
         self._mark = 'X'
 
@@ -77,16 +77,29 @@ class SensoryMemory(Module):
     def __next__(self):
         return self.sensory_memory[-1]
 
+def match(sought_content):
+    def match_method(content):
+        if content == sought_content:
+            return True
+        if getattr(content, '__contains__', None) is not None \
+           and sought_content in content:
+                return True
+        return False
+    return match_method
 
 class AttentionCodelet(Module):
-    def __init__(self, is_match=lambda x: True):
+    def __init__(self, is_match=lambda x: True, match_content=None):
         super().__init__()
-        self._match_content = is_match
+        self._match_content = match_content
+        if match_content is None:
+            self._match_method = is_match
+        else:
+            self._match_method = match(self._match_content)
         self.coalition = []
 
     def __call__(self, module):
         for content in module:
-            if self._match_content(content):
+            if self._match_method(content):
                 self.coalition.append(content)
 
     def __next__(self):
