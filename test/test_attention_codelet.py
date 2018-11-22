@@ -1,4 +1,6 @@
 from unittest import TestCase
+from hypothesis import given
+from hypothesis import strategies as st
 
 from common import AttentionCodelet, Workspace
 
@@ -46,18 +48,21 @@ class TestAttentionCodelet(TestCase):
         except Exception as e:
             self.fail(e)
 
-    def test_next(self):
+    @given(st.integers(), st.lists(st.integers()))
+    def test_next_with_integer_lists(self, a, b):
         try:
             w = Workspace()
 
             # Add content to the Workspace
-            for i in range(10):
+            for i in b:
                 w(i)
 
-            for v in range(10):
-                c = AttentionCodelet(match_content=5)
-                c(w)
-                coalition= next(c)
-                self.assertEqual(5, coalition[0])
+            c = AttentionCodelet(match_content=a)
+            c(w)
+            coalition= next(c)
+            if a in b:
+                self.assertIn(a, coalition)
+            else:
+                self.assertNotIn(a, coalition)
         except Exception as e:
             self.fail(e)
