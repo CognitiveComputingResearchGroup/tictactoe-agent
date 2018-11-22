@@ -7,8 +7,8 @@ class TestAgent(TestCase):
     def test_run(self):
         try:
             # Verify termination condition on bounded run
-            count = run(0)
-            self.assertEqual(count, 0)
+            count = run(1)
+            self.assertEqual(count, 1)
 
         except Exception as e:
             self.fail(e)

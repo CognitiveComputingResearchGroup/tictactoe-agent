@@ -43,9 +43,10 @@ class Environment(Module):
             return True
         return False
 
-    def __call__(self, action):
-        if action:
-            self._make_move(action[1], action[0])
+    def __call__(self, motor_plan):
+        for action in motor_plan:
+            if action is not None:
+                self._make_move(action[0], action[1])
 
     def __next__(self):
         return self._board
@@ -204,7 +205,7 @@ class ProceduralMemory(Module):
 
 
 class ActionSelection(Module):
-    def __int__(self):
+    def __init__(self):
         super().__init__()
         self.behaviors = []
 
