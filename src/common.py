@@ -1,5 +1,7 @@
 import random
 
+from env.environment import Board, Move
+
 
 class Module(object):
     def __init__(self, *args, **kwargs):
@@ -97,21 +99,38 @@ class AttentionCodelet(Module):
 
 
 class StructureBuildingCodelet(Module):
-    def __init__(self, is_match=lambda x: True, transform=lambda x: x):
+    def __init__(self, select=lambda x: True, transform=lambda x: x):
         super().__init__()
 
-        self.is_match = is_match
+        self.select = select
         self.transform = transform
-        self.structures = []
+
+        self._structures = []
 
     def __call__(self, workspace):
-        new_structures = map(self.transform, filter(self.is_match, workspace))
-        self.structures.extend(new_structures)
+        new_structures = map(self.transform, filter(self.select, workspace))
+        self._structures.extend(new_structures)
 
     def __next__(self):
-        structures = self.structures
-        self.structures = []
+        structures = self._structures
+        self._structures = []
         return structures
+
+
+def is_board(structure):
+    return isinstance(structure, Board)
+
+
+def create_move(board):
+    if board.is_full():
+        return None, board
+
+    move = Move(position=random.choice(board.blanks), mark='X')
+
+    new_board = board.copy()
+    new_board[move.position] = move.mark
+
+    return move, new_board
 
 
 class Workspace(Module):

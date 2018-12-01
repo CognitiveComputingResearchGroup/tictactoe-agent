@@ -14,7 +14,10 @@ procedural_memory = ProceduralMemory(initial_schemes=[Scheme(action=(pos, 'X')) 
 action_selection = ActionSelection()
 sensory_motor_system = SensoryMotorSystem()
 
-sb_codelets = [StructureBuildingCodelet()]
+sb_codelets = [
+    StructureBuildingCodelet(select=lambda s: is_board(s) and not s.is_full(),
+                             transform=create_move)
+]
 attn_codelets = [AttentionCodelet()]
 
 
