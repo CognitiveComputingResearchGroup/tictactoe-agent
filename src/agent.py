@@ -53,8 +53,9 @@ def run(n=None):
         # Cue PAM from next workspace content
         cue(next(workspace), pam)
 
-        # Update pre-conscious workspace from next cued memory
-        workspace(next(cue))
+        # Update pre-conscious workspace with cued memories
+        for content in next(cue):
+            workspace(content)
 
         # Attention codelets scan pre-conscious workspace and add coalitions to global workspace
         for codelet in attn_codelets:
