@@ -1,11 +1,14 @@
 #!/usr/bin/python
 #  coding=utf-8
+from collections import namedtuple
 
 BLANK = -1
 PLAYER1 = 0
 PLAYER2 = 1
 INVALID_MOVE = 9
 PAIN = 1
+
+Move = namedtuple('Move', ['position', 'mark'])
 
 
 class Board(object):
@@ -25,7 +28,7 @@ class Board(object):
 
     @classmethod
     def blank_board(cls):
-        return cls([BLANK]*9)
+        return cls([BLANK] * 9)
 
     @property
     def blanks(self):
@@ -51,7 +54,7 @@ class Board(object):
         return True if self._board[position] == BLANK else False
 
     def reset(self):
-        self._board = [BLANK]*9
+        self._board = [BLANK] * 9
         self._winner = None
 
     def haswon(self):
@@ -68,6 +71,12 @@ class Board(object):
                 self._winner = PLAYER2
                 return True
         return False
+
+    def copy(self):
+        """
+        Returns a copy of this Board.
+        """
+        return Board(self._board.copy())
 
     def __getitem__(self, pos):
         return self._board[pos]
@@ -87,6 +96,15 @@ class Board(object):
     def __str__(self):
         return self.board_string()
 
+    def __eq__(self, other):
+        if not isinstance(other, Board):
+            return False
+
+        return self._board == other._board
+
+    def __len__(self):
+        return len(self._board)
+
     def board_string(self):
         board_template = '\n' \
                          '{}│{}│{}\n' \
@@ -97,7 +115,8 @@ class Board(object):
         ox_board = [self._board_marks[value] for value in self._board]
         return board_template.format(*ox_board)
 
+    def is_full(self):
+        return len(self.blanks) == 0
 
-def first_blank(board):
-    return Board(board).first_blank
-
+    def is_empty(self):
+        return len(self.blanks) == len(self._board)
