@@ -1,6 +1,7 @@
 from unittest import TestCase
+from unittest.mock import MagicMock
 
-from common import CueingProcess, Module
+from common import CueingProcess, PerceptualAssociativeMemory
 
 
 class TestCueingProcess(TestCase):
@@ -10,38 +11,19 @@ class TestCueingProcess(TestCase):
         except Exception as e:
             self.fail(e)
 
-    def test_call(self):
-        try:
-            c = CueingProcess()
-            m = DummyModule()
+    def test_cue(self):
 
-            # invoke __call__ several times (testing for exceptions)
-            for v in range(100):
-                c(v, m)
+        pam = PerceptualAssociativeMemory()
+        pam.cue = MagicMock(side_effect=lambda c: [c, 'happy'])
 
-        except Exception as e:
-            self.fail(e)
+        content = (1, 'X')
+        cue = CueingProcess()
 
-    def test_next(self):
-        try:
-            c = CueingProcess()
-            m = DummyModule()
+        # Execute cue operation
+        cue(content, pam)
 
-            for expected in range(10):
-                c(expected, m)  # Perform cue operation
-                actual = next(c)
-                self.assertListEqual([expected], actual)
-        except Exception as e:
-            self.fail(e)
+        # Test that CueingProcess calls pam once
+        pam.cue.assert_called_once_with(content)
 
-
-class DummyModule(Module):
-    def __init__(self):
-        super().__init__()
-        self.content = []
-
-    def __call__(self, content):
-        self.content.append(content)
-
-    def __next__(self):
-        return self.content[-1]
+        cued_content = next(cue)
+        self.assertEqual([content, 'happy'], cued_content[0])

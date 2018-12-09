@@ -160,10 +160,10 @@ class CueingProcess(Module):
 
     def __call__(self, content, module):
         # cue module
-        module(content)
+        cued_content = module.cue(content)
 
         # receive activated content from cued module
-        self.cued_content.append(content)
+        self.cued_content.append(cued_content)
 
     def __next__(self):
         cued_content = self.cued_content
