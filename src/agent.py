@@ -18,7 +18,21 @@ sb_codelets = [
     StructureBuildingCodelet(select=lambda s: is_board(s) and not s.is_full(),
                              transform=create_move)
 ]
-attn_codelets = [AttentionCodelet()]
+
+def happy_match(value):
+    try:
+        if isinstance(value, str):
+            return value == "happy"
+        return any(happy_match(x) for x in value)
+
+    except Exception as x:
+        return False
+
+
+codelet_happy_match = AttentionCodelet(happy_match)
+
+attn_codelets = [codelet_happy_match]
+
 
 
 def running(step, last=None):
