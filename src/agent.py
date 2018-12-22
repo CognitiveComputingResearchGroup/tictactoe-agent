@@ -11,7 +11,10 @@ pam = PerceptualAssociativeMemory()
 cue = CueingProcess()
 global_workspace = GlobalWorkspace()
 procedural_memory = ProceduralMemory(
-    initial_schemes=[Scheme(context=Move(pos, 'X'), action=Move(pos, 'X')) for pos in range(9)],
+    initial_schemes=[Scheme(
+        context=Move(pos, 'X'),  # TODO: Should this really be both current board and move???
+        action=Move(pos, 'X'),
+        result=lambda board: board_position_after_move(board, Move(pos, 'X'))) for pos in range(9)],
     context_match=exact_match_context_by_move)
 
 action_selection = ActionSelection()

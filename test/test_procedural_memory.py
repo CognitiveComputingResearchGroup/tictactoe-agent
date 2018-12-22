@@ -1,8 +1,8 @@
 from collections import Counter
 from unittest import TestCase
 
-from common import ProceduralMemory, Scheme, exact_match_context_by_move
-from env.environment import Move
+from common import ProceduralMemory, Scheme, exact_match_context_by_move, board_position_after_move
+from env.environment import Move, Board
 
 
 class TestProceduralMemory(TestCase):
@@ -83,3 +83,38 @@ class TestProceduralMemory(TestCase):
         content = [Move(1, 'X'), 'Other Stuff', ['More', 'Stuff']]
         self.assertTrue(exact_match_context_by_move(content, scheme_1))
         self.assertFalse(exact_match_context_by_move(content, scheme_2))
+
+    def test_board_position_after_move(self):
+
+        BLANK_BOARD = Board.blank_board()
+
+        # Scenario 1: Add single mark to blank board
+        for pos in range(9):
+            move = Move(position=pos, mark='X')
+            board = BLANK_BOARD
+
+            expected_board = board.copy()
+            expected_board[move.position] = move.mark
+
+            self.assertEqual(board_position_after_move(board, move), expected_board)
+
+            # Verify no side effects
+            self.assertEqual(board, BLANK_BOARD)
+
+        # Scenario 2: Add single mark to non-blank board / no conflict in mark
+        CENTER_MARK_BOARD = BLANK_BOARD.copy()
+        CENTER_MARK_BOARD[4] = 'X'
+
+        for pos in range(9):
+            move = Move(position=pos, mark='X')
+            board = CENTER_MARK_BOARD
+
+            # Note that in the case where we are adding a mark in the center square, the expected
+            # board will be equal to the original board
+            expected_board = board.copy()
+            expected_board[move.position] = move.mark
+
+            self.assertEqual(board_position_after_move(board, move), expected_board)
+
+            # Verify no side effects
+            self.assertEqual(board, CENTER_MARK_BOARD)

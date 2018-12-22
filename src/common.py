@@ -238,6 +238,12 @@ def exact_match_context_by_move(content, scheme):
     return False
 
 
+def board_position_after_move(curr_board, move):
+    new_board = curr_board.copy()
+    new_board[move.position] = move.mark
+    return new_board
+
+
 class ActionSelection(Module):
     def __init__(self):
         super().__init__()
@@ -248,6 +254,9 @@ class ActionSelection(Module):
 
     def __next__(self):
         maximally_active_behavior = sorted(self.behaviors, key=lambda behavior: behavior.activation)[-1]
+
+        # TODO: This may need to be updated to treat the behavior's result as a function.  (See
+        # TODO: initial schemes in agent.py)
         expectation_codelet = AttentionCodelet(
             lambda x: x in maximally_active_behavior.result or x == maximally_active_behavior.result)
         return maximally_active_behavior, expectation_codelet
