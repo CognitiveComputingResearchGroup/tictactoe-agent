@@ -10,7 +10,10 @@ workspace = Workspace()
 pam = PerceptualAssociativeMemory()
 cue = CueingProcess()
 global_workspace = GlobalWorkspace()
-procedural_memory = ProceduralMemory(initial_schemes=[Scheme(action=(pos, 'X')) for pos in range(9)])
+procedural_memory = ProceduralMemory(
+    initial_schemes=[Scheme(context=Move(pos, 'X'), action=Move(pos, 'X')) for pos in range(9)],
+    context_match=exact_match_context_by_move)
+
 action_selection = ActionSelection()
 sensory_motor_system = SensoryMotorSystem()
 
@@ -75,7 +78,7 @@ def run(n=None):
         behavior, exp_codelet = next(action_selection)
 
         # Add expectation codelet to set of attention codelets
-        if exp_codelet:
+        if exp_codelet is not None:
             attn_codelets.append(exp_codelet)
 
         # Update sensory motor memory based on selected action

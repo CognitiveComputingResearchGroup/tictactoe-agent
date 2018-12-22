@@ -1,3 +1,4 @@
+import collections
 import random
 
 from env.environment import Board, Move
@@ -197,17 +198,44 @@ class Scheme(object):
 
 
 class ProceduralMemory(Module):
-    def __init__(self, initial_schemes=None):
+    def __init__(self, initial_schemes=None, context_match=None, activation_threshold=1.0):
         super().__init__()
 
-        self.schemes = [] if initial_schemes is None else list(initial_schemes)
+        self._schemes = [] if initial_schemes is None else list(initial_schemes)
+        self._context_match = context_match
+        self._activation_threshold = activation_threshold
 
-    # ignore conscious broadcast for now
     def __call__(self, broadcast):
-        pass
+        if broadcast is None:
+            return
+
+        # Increase activation of schemes with context match
+        for scheme in self._schemes:
+            if self._context_match(broadcast, scheme):
+                scheme.activation = 1.0
 
     def __next__(self):
-        return None if len(self.schemes) == 0 else random.choice(self.schemes)
+        # Find schemes with activation >= activation_threshold
+        active_schemes = list(filter(lambda s: s.activation >= self._activation_threshold, self._schemes))
+
+        # Return a random scheme if no schemes above activation threshold
+        if len(active_schemes) == 0 and len(self._schemes) > 0:
+            return random.choice(self._schemes)
+
+        return active_schemes
+
+
+def exact_match_context_by_move(content, scheme):
+    # Case 1: Content is a Move
+    if isinstance(content, Move):
+        return scheme.context == content
+
+    # Case 2: Content is a non-Move iterable (special consideration for strings to avoid infinite recursion)
+    if isinstance(content, collections.Iterable) and not isinstance(content, str):
+        return any(exact_match_context_by_move(c, scheme) for c in content)
+
+    # Case 3: Content is a non-Move, non-Iterable
+    return False
 
 
 class ActionSelection(Module):

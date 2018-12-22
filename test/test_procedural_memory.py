@@ -1,7 +1,8 @@
 from collections import Counter
 from unittest import TestCase
 
-from common import ProceduralMemory, Scheme
+from common import ProceduralMemory, Scheme, exact_match_context_by_move
+from env.environment import Move
 
 
 class TestProceduralMemory(TestCase):
@@ -30,8 +31,8 @@ class TestProceduralMemory(TestCase):
             #############
             pm = ProceduralMemory()
 
-            # No initial schemes, so should return None
-            self.assertEqual(next(pm), None)
+            # No initial _schemes, so should return None
+            self.assertEqual(next(pm), [])
 
             # Test Case 2
             #############
@@ -50,7 +51,7 @@ class TestProceduralMemory(TestCase):
 
             pm = ProceduralMemory(initial_schemes=[scheme_1, scheme_2])
 
-            # Two schemes -- each should be randomly selected (uniform distribution)
+            # Two _schemes -- each should be randomly selected (uniform distribution)
             selected = Counter([next(pm) for i in range(10000)])
 
             # Checking for approximately equal counts
@@ -58,3 +59,27 @@ class TestProceduralMemory(TestCase):
 
         except Exception as e:
             self.fail(e)
+
+    def test_exact_match_context_by_move(self):
+        scheme_1 = Scheme(context=Move(1, 'X'))
+        scheme_2 = Scheme(context=Move(2, 'X'))
+
+        # Test with content = None
+        content = None
+        self.assertFalse(exact_match_context_by_move(content, scheme_1))
+        self.assertFalse(exact_match_context_by_move(content, scheme_2))
+
+        # Test with type(content) == Move
+        content = Move(1, 'X')
+        self.assertTrue(exact_match_context_by_move(content, scheme_1))
+        self.assertFalse(exact_match_context_by_move(content, scheme_2))
+
+        # Test with non-iterable content where type(content) == Move
+        content = 123
+        self.assertFalse(exact_match_context_by_move(content, scheme_1))
+        self.assertFalse(exact_match_context_by_move(content, scheme_2))
+
+        # Test with iterable content containing content(type) == Move
+        content = [Move(1, 'X'), 'Other Stuff', ['More', 'Stuff']]
+        self.assertTrue(exact_match_context_by_move(content, scheme_1))
+        self.assertFalse(exact_match_context_by_move(content, scheme_2))
