@@ -96,20 +96,20 @@ class AttentionCodelet(Module):
         coalition = self.coalition
         self.coalition = []
         return coalition
-        
+
 class DefaultAttentionCodelet(Module):
     def __init__(self):
         super().__init__()
         self.coalition = []
 
-    def __call__(self, module):
+    def __call__(self, workspace):
         max_sal = 0
         to_ins = None
-        for cog_content in module:
+        for cog_content in workspace:
             if cog_content.salience > max_sal:
                 to_ins = cog_content
                 max_sal = cog_content.salience
-                
+
         self.coalition.append(to_ins)
 
     def __next__(self):
@@ -118,7 +118,7 @@ class DefaultAttentionCodelet(Module):
         return coalition
 
 
-class CognitiveContent:
+class CognitiveContent(object):
     def __init__(self, incentive_salience=0, total_activation=0, content=None):
         super().__init__()
         self.incentive_salience = incentive_salience
