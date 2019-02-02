@@ -19,7 +19,8 @@ sb_codelets = [
                              transform=create_move)
 ]
 
-def happy_match(value):
+def happy_match(cog_content):
+    value = cog_content.content
     try:
         if isinstance(value, str):
             return value == "happy"
@@ -29,9 +30,10 @@ def happy_match(value):
         return False
 
 
+
 codelet_happy_match = AttentionCodelet(happy_match)
 
-attn_codelets = [codelet_happy_match]
+attn_codelets = [codelet_happy_match, DefaultAttentionCodelet()]
 
 
 
