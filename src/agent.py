@@ -11,19 +11,13 @@ pam = PerceptualAssociativeMemory()
 cue = CueingProcess()
 global_workspace = GlobalWorkspace()
 procedural_memory = ProceduralMemory(
-    initial_schemes=[Scheme(
-        context=Move(pos, 'X'),  # TODO: Should this really be both current board and move???
-        action=Move(pos, 'X'),
-        result=lambda board: board_position_after_move(board, Move(pos, 'X'))) for pos in range(9)],
+    initial_schemes=[Scheme(context=None, action=Move(position, 'X'), result=None) for position in range(9)],
     context_match=exact_match_context_by_move)
 
 action_selection = ActionSelection()
 sensory_motor_system = SensoryMotorSystem()
 
-sb_codelets = [
-    StructureBuildingCodelet(select=lambda s: is_board(s) and not s.is_full(),
-                             transform=create_move)
-]
+sb_codelets = []
 attn_codelets = [AttentionCodelet()]
 
 
@@ -72,10 +66,11 @@ def run(n=None):
         broadcast = next(global_workspace)
 
         # Update procedural memory based on conscious broadcast
-        procedural_memory(broadcast)
+        procedural_memory.receive_broadcast(broadcast)
+        candidate_behaviors = procedural_memory.candidate_behaviors
 
         # Update action selection from procedural memory
-        action_selection(next(procedural_memory))
+        action_selection(candidate_behaviors)
 
         # Retrieve next action and associated expectation codelet from action selection
         behavior, exp_codelet = next(action_selection)
