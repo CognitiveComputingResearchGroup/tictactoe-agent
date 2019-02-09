@@ -7,18 +7,7 @@ from scipy.special import softmax
 from env.environment import Board, Move
 
 
-class Module(object):
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-
-    def receive_broadcast(self, broadcast):
-        """
-        Returns next module state.  Corresponds to the next item that would be returned from iterating over this module.
-        """
-        raise NotImplementedError()
-
-
-class Environment(Module):
+class Environment:
     def __init__(self):
         super().__init__()
         from src.env.environment import Board
@@ -43,7 +32,7 @@ class Environment(Module):
         return self._board
 
 
-class PerceptualAssociativeMemory(Module):
+class PerceptualAssociativeMemory:
     def __init__(self):
         super().__init__()
 
@@ -57,7 +46,7 @@ class PerceptualAssociativeMemory(Module):
         return 'happy_dummy'
 
 
-class SensoryMemory(Module):
+class SensoryMemory:
     def __init__(self):
         super().__init__()
 
@@ -70,14 +59,14 @@ class SensoryMemory(Module):
         return self.sensory_memory[-1]
 
 
-class AttentionCodelet(Module):
+class AttentionCodelet:
     def __init__(self, is_match=lambda x: True):
         super().__init__()
         self._match_content = is_match
         self.coalition = []
 
-    def __call__(self, module):
-        for cog_content in module:
+    def __call__(self, workspace):
+        for cog_content in workspace:
             if self._match_content(cog_content):
                 self.coalition.append(cog_content)
 
@@ -86,7 +75,8 @@ class AttentionCodelet(Module):
         self.coalition = []
         return coalition
 
-class DefaultAttentionCodelet(Module):
+
+class DefaultAttentionCodelet:
     def __init__(self):
         super().__init__()
         self.coalition = []
@@ -107,7 +97,7 @@ class DefaultAttentionCodelet(Module):
         return coalition
 
 
-class CognitiveContent(object):
+class CognitiveContent:
     def __init__(self, incentive_salience=0, total_activation=0, content=None):
         super().__init__()
         self.incentive_salience = incentive_salience
@@ -119,8 +109,7 @@ class CognitiveContent(object):
         return self.total_activation + self.incentive_salience
 
 
-
-class StructureBuildingCodelet(Module):
+class StructureBuildingCodelet:
     def __init__(self, select=lambda x: True, transform=lambda x: x):
         super().__init__()
 
@@ -155,7 +144,7 @@ def create_move(board):
     return move, new_board
 
 
-class Workspace(Module):
+class Workspace:
     def __init__(self):
         super().__init__()
 
@@ -174,7 +163,7 @@ class Workspace(Module):
         return iter(self.workspace_content)
 
 
-class CueingProcess(Module):
+class CueingProcess:
     def __init__(self):
         super().__init__()
 
@@ -193,7 +182,7 @@ class CueingProcess(Module):
         return cued_content
 
 
-class GlobalWorkspace(Module):
+class GlobalWorkspace:
     def __init__(self):
         super().__init__()
 
@@ -209,7 +198,7 @@ class GlobalWorkspace(Module):
         return self.coalitions[-1]
 
 
-class Scheme(object):
+class Scheme:
 
     def __init__(self, context=None, action=None, result=None, current_activation=0.0, base_level_activation=0.0):
         self.context = context
@@ -224,7 +213,7 @@ class Scheme(object):
         return self.current_activation + self.base_level_activation
 
 
-class ProceduralMemory(Module):
+class ProceduralMemory:
 
     def __init__(self, initial_schemes=None, context_match=lambda s, b: 0.0, result_match=lambda s, b: 0.0,
                  initial_base_level_activation=0.2, activation_threshold=1.0):
@@ -293,7 +282,7 @@ def board_position_after_move(curr_board, move):
     return new_board
 
 
-class ActionSelection(Module):
+class ActionSelection:
     def __init__(self):
         super().__init__()
         self.behaviors = []
@@ -311,7 +300,7 @@ class ActionSelection(Module):
         return maximally_active_behavior, expectation_codelet
 
 
-class SensoryMotorSystem(Module):
+class SensoryMotorSystem:
     def __init__(self):
         super().__init__()
 
