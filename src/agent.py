@@ -9,6 +9,10 @@ N_STEPS = None
 # Module initialization
 sensory_memory = SensoryMemory()
 workspace = Workspace()
+
+# Feature Detectors
+
+
 pam = PerceptualAssociativeMemory(initial_concepts={"board": CognitiveContent("board"),
                                                     "happy": CognitiveContent("happy", affective_valence=1.0),
                                                     "sad": CognitiveContent("sad", affective_valence=-1.0),

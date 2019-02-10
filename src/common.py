@@ -18,9 +18,19 @@ class SensoryMemory:
         self.sensory_scene = SensoryScene(observation=obs, outcome=reward, gameover=done)
 
 
+class FeatureDetector:
+    def __init__(self, concept, similarity_metric):
+        self._concept = concept
+        self._similarity_metric = similarity_metric
+
+    def apply(self, content):
+        return self._similarity_metric(content)
+
+
 class PerceptualAssociativeMemory:
-    def __init__(self, initial_concepts=None):
-        self._concepts = initial_concepts or {}
+    def __init__(self, initial_concepts, feature_detectors):
+        self._concepts = initial_concepts
+        self._feature_detectors = feature_detectors
 
     def receive_broadcast(self, broadcast):
         pass
@@ -31,7 +41,12 @@ class PerceptualAssociativeMemory:
         # "Feature Detectors"
         if isinstance(SensoryScene, content):
             board = SensoryScene.observation
+            gameover = SensoryScene.gameover
+            outcome = SensoryScene.outcome
+
             cued_content.append([self._concepts["board"], board])
+            cued_content.append([])
+
 
             return CognitiveContent()
 
@@ -143,6 +158,11 @@ class CueingProcess:
         self.cueable_modules = cueable_modules or []
 
     def process(self, workspace):
+        # TODO: Currently implemented as 2 passes: 1 for perceptual scene and
+        # another for generated content in the csm.  Need to rethink this later.
+        for module in self.cueable_modules:
+            module.receive_cue(workspace.csm.perceptual_scene)
+
         for content in workspace.csm:
             for module in self.cueable_modules:
                 cued_content = module.receive_cue(content)
