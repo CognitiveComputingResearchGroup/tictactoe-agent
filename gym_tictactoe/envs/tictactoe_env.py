@@ -31,7 +31,7 @@ class TicTacToeEnv(gym.Env):
                                             high=np.array([1] * (self._size ** 2)),
                                             dtype=np.int64)
 
-    def step(self, action=None):
+    def step(self, action):
 
         reward = 0
 
@@ -42,6 +42,10 @@ class TicTacToeEnv(gym.Env):
         }
 
         # Check if current state is terminal, if so then return warning
+        if action is None:
+            info['comment'] = 'No action taken'
+            return self._board.asarray(), reward, self._done, info
+
         if self._done:
             logger.warning(
                 """
@@ -62,7 +66,7 @@ class TicTacToeEnv(gym.Env):
             reward = self.illegal_move
             info['comment'] = 'illegal action'
 
-        elif action is not None:
+        else:
             # update board with player's action
             self._board[action] = X
 

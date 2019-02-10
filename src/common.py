@@ -1,19 +1,39 @@
 import collections
+import random
 
 import numpy as np
 from scipy.special import expit as sigmoid
 from scipy.special import softmax
 
+SensoryScene = collections.namedtuple('SensoryScene', ['observation', 'outcome', 'gameover'])
+
+
+class SensoryMemory:
+    def __init__(self):
+        self.sensory_scene = []
+
+    def receive_sensors(self, environment):
+        obs, reward, done, info = environment.step(action=None)
+
+        self.sensory_scene = SensoryScene(observation=obs, outcome=reward, gameover=done)
+
 
 class PerceptualAssociativeMemory:
     def __init__(self, initial_concepts=None):
-        self._concepts = initial_concepts or []
+        self._concepts = initial_concepts or {}
 
     def receive_broadcast(self, broadcast):
         pass
 
     def receive_cue(self, content):
-        # Recognize board
+        cued_content = []
+
+        # "Feature Detectors"
+        if isinstance(SensoryScene, content):
+            board = SensoryScene.observation
+            cued_content.append([self._concepts["board"], board])
+
+            return CognitiveContent()
 
         # Recognize winning board (add feeling node with positive affective valence)
 
@@ -22,19 +42,9 @@ class PerceptualAssociativeMemory:
         return None
 
 
-class SensoryMemory:
-    def __init__(self):
-        self.sensory_scene = []
-
-    def receive_sensors(self, environment):
-        obs, reward, done, info = environment.step()
-
-        self.sensory_scene = [obs]
-
-
 class CognitiveContent:
 
-    def __init__(self, content):
+    def __init__(self, content, affective_valence=0.0):
         self.content = set(content)
 
         # Activation and Incentive Salience Parameters
@@ -73,8 +83,8 @@ class AttentionCodelet:
     def __init__(self, select=lambda x: True):
         self._select = select
 
-    def process(self, workspace):
-        return filter(self._select, workspace.csm)
+    def apply(self, workspace):
+        return list(filter(self._select, workspace.csm))
 
 
 class StructureBuildingCodelet:
@@ -84,20 +94,32 @@ class StructureBuildingCodelet:
 
         self.id = id
 
-    def process(self, workspace):
-        return map(self._transform, filter(self._select, workspace.csm))
+    def apply(self, workspace):
+        return list(map(self._transform, filter(self._select, workspace.csm)))
 
 
 class CurrentSituationalModel:
     def __init__(self):
         self._content = set()
 
+        self.perceptual_scene = None
+
     def receive_content(self, content):
-        if not isinstance(CognitiveContent, content):
+        if content is None:
+            return
+
+        if not isinstance(content, CognitiveContent):
             content = CognitiveContent(content)
             content.current_activation = Workspace.initial_current_activation
 
         self._content.union(set(content))
+
+    def receive_sensory_scene(self, scene):
+
+        # TODO: Should be distinct from the sensory scene -- containing both real and virtual content
+        # TODO: On calling receive_sensory_scene, the content from the sensory_scene should be integrated
+        # TODO: Into the perceptual scene, not overwrite it
+        self.perceptual_scene = scene
 
     def __iter__(self):
         return iter(self._content)
@@ -121,12 +143,12 @@ class CueingProcess:
         self.cueable_modules = cueable_modules or []
 
     def process(self, workspace):
-        for content in workspace:
+        for content in workspace.csm:
             for module in self.cueable_modules:
                 cued_content = module.receive_cue(content)
 
                 if cued_content is not None:
-                    workspace.csm.add([content, cued_content])
+                    workspace.csm.receive_cue([content, cued_content])
 
 
 class Coalition:
@@ -146,13 +168,16 @@ class Coalition:
 
 class CoalitionManager:
     def __init__(self):
-
         # Each element will be an attention codelet + the content that the attn codelet is advocating for
         self._candidates = []
 
     def receive(self, attn_codelet, content):
+        if content is None or len(content) == 0:
+            return
+
         self._candidates.append((content, attn_codelet))
 
+    @property
     def coalitions(self):
         # TODO: add more sophisticated implementation based on shared content / concerns
         coalitions = self._candidates
@@ -165,6 +190,9 @@ class GlobalWorkspace:
         self.coalitions = []
 
     def receive_coalitions(self, coalitions):
+        if coalitions is None or len(coalitions) == 0:
+            return
+
         self.coalitions.extend(coalitions)
 
     @property
@@ -174,6 +202,9 @@ class GlobalWorkspace:
             return None
 
         return max(self.coalitions, key=lambda c: c.activation)
+
+
+Action = collections.namedtuple('Action', ['type', 'value'])
 
 
 class Scheme:
@@ -201,6 +232,9 @@ class ProceduralMemory:
         # Activation parameters
         self.activation_threshold = activation_threshold
 
+        # Use for learning
+        self.recently_selected_behaviors = collections.deque(maxlen=3)
+
     @property
     def candidate_behaviors(self):
         # Find schemes with activation >= activation_threshold
@@ -227,25 +261,29 @@ class ProceduralMemory:
 
         self._learn(broadcast)
 
+    def receive_selected_behavior(self, behavior):
+        self.recently_selected_behaviors.append(behavior)
+
     def create_scheme(self, context=None, action=None, result=None):
         return Scheme(context, action, result, current_activation=0.0, base_level_activation=0.2)
 
     def _learn(self, broadcast):
+
+        # TODO: Need to compare broadcast to results in recently selected behaviors
         pass
 
 
-
 def exact_match_by_board(content, scheme):
-    pass
+    return True
 
-    # # Case 1: Content is a Move
+    # # Case 1: Content is a Board
     # if isinstance(content, Move) and scheme.context == content:
     #     return 1.0
     #
     # # Case 2: Content is a non-Move iterable (special consideration for strings to avoid infinite recursion)
     # if isinstance(content, collections.abc.Iterable) \
     #         and not isinstance(content, str) \
-    #         and any(exact_match_context_by_move(c, scheme) for c in content):
+    #         and any(exact_match_by_board(c, scheme) for c in content):
     #     return 1.0
     #
     # # Case 3: Content is a non-Move, non-Iterable
@@ -268,3 +306,38 @@ class ActionSelection:
         # TODO: need more sophisticated action selection that includes incentive salience of results
         # TODO: to determine the most "valueable" action to choose.
         return max(self.behaviors, key=lambda c: c.activation)
+
+
+MotorCommand = collections.namedtuple('MotorCommand', ['actuator', 'value'])
+
+
+class MotorPlanTemplate:
+    def __init__(self, motor_commands, triggers, choice_function):
+        self.motor_commands = motor_commands
+        self.triggers = triggers
+        self.choice_function = choice_function
+
+    # No potential for online control for this agent, but I am including sensory_scene in the method
+    # signature for completeness
+    def choose_motor_command(self, sensory_scene):
+        # Apply triggers on motor commands
+        candidates = [command for command in self.motor_commands for trigger in self.triggers if trigger(command)]
+
+        # Choose single motor command
+        return self.choice_function(candidates)
+
+    def instantiate(self):
+        pass
+
+
+class SensoryMotorSystem:
+    def __init__(self, motor_plan_templates):
+        self.motor_plan_templates = motor_plan_templates
+        self.motor_plan = None
+
+    def receive_selected_behavior(self, behavior):
+        if behavior is None:
+            raise ValueError('Selected behavior cannot be None')
+
+        # Instantiate a motor plan
+        self.motor_plan = self.motor_plan_templates[behavior.type].instantiate(behavior.value)
