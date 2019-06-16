@@ -1,6 +1,8 @@
 from common import *
 
 import gym
+import sys
+sys.path.append("..")
 import gym_tictactoe  # Needed to add 'TicTacToe-v0' into gym registry
 
 # Number of cognitive cycles to execute (None -> forever)
@@ -11,7 +13,6 @@ sensory_memory = SensoryMemory()
 workspace = Workspace()
 
 # Feature Detectors
-
 
 pam = PerceptualAssociativeMemory(initial_concepts={"board": CognitiveContent("board"),
                                                     "happy": CognitiveContent("happy", affective_valence=1.0),
@@ -31,14 +32,17 @@ action_selection = ActionSelection()
 
 # Motor Plan Templates
 reset_mpt = MotorPlanTemplate(motor_commands=[MotorCommand(actuator='reset', value=None)],
-                              triggers=lambda mc: True,
+                              triggers=[lambda mc: True],
                               choice_function=lambda mcs: random.choice(mcs))
 
-move_mpt = MotorPlanTemplate(motor_commands=[MotorCommand(actuator='move', value=None)],
-                             triggers=lambda mc: True,
+mp_templates = {i: MotorPlanTemplate(motor_commands=[MotorCommand(actuator='move', value=i)],
+                             triggers=[lambda mc: True],
                              choice_function=lambda mcs: random.choice(mcs))
+                                    for i in range(10) }
 
-sensory_motor_system = SensoryMotorSystem(motor_plan_templates={'reset': reset_mpt, 'move': move_mpt})
+mp_templates['reset'] = reset_mpt
+
+sensory_motor_system = SensoryMotorSystem(motor_plan_templates=mp_templates)
 
 # Create Codelets
 sb_codelets = []

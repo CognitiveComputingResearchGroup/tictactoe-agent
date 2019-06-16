@@ -28,9 +28,8 @@ class FeatureDetector:
 
 
 class PerceptualAssociativeMemory:
-    def __init__(self, initial_concepts, feature_detectors):
+    def __init__(self, initial_concepts):
         self._concepts = initial_concepts
-        self._feature_detectors = feature_detectors
 
     def receive_broadcast(self, broadcast):
         pass
@@ -60,7 +59,7 @@ class PerceptualAssociativeMemory:
 class CognitiveContent:
 
     def __init__(self, content, affective_valence=0.0):
-        self.content = set(content)
+        self.content = list(content)
 
         # Activation and Incentive Salience Parameters
         self.base_level_activation = 0.0
@@ -115,19 +114,19 @@ class StructureBuildingCodelet:
 
 class CurrentSituationalModel:
     def __init__(self):
-        self._content = set()
+        self._content = [None]
 
         self.perceptual_scene = None
 
     def receive_content(self, content):
-        if content is None:
+        if content is None or len(content) == 0:
             return
 
         if not isinstance(content, CognitiveContent):
             content = CognitiveContent(content)
             content.current_activation = Workspace.initial_current_activation
 
-        self._content.union(set(content))
+        self._content[0] = content
 
     def receive_sensory_scene(self, scene):
 
@@ -135,6 +134,7 @@ class CurrentSituationalModel:
         # TODO: On calling receive_sensory_scene, the content from the sensory_scene should be integrated
         # TODO: Into the perceptual scene, not overwrite it
         self.perceptual_scene = scene
+        self.receive_content(scene)
 
     def __iter__(self):
         return iter(self._content)
@@ -176,6 +176,7 @@ class Coalition:
         self.content = content
         self.attn_codelets = attn_codelets
 
+
     @property
     def activation(self):
         # TODO: calculate activation on coalition...
@@ -195,7 +196,7 @@ class CoalitionManager:
         if content is None or len(content) == 0:
             return
 
-        self._candidates.append((content, attn_codelet))
+        self._candidates.append(Coalition(content[0], attn_codelet))
 
     @property
     def coalitions(self):
@@ -346,8 +347,27 @@ class MotorPlanTemplate:
         # Choose single motor command
         return self.choice_function(candidates)
 
-    def instantiate(self):
-        pass
+    def instantiate(self, value):
+        self.choice_function = lambda x: value
+
+
+class MotorPlanTemplate:
+    def __init__(self, motor_commands, triggers, choice_function):
+        self.motor_commands = motor_commands
+        self.triggers = triggers
+        self.choice_function = choice_function
+
+    # No potential for online control for this agent, but I am including sensory_scene in the method
+    # signature for completeness
+    def choose_motor_command(self, sensory_scene):
+        # Apply triggers on motor commands
+        candidates = [command for command in self.motor_commands for trigger in self.triggers if trigger(command)]
+
+        # Choose single motor command
+        return self.choice_function(candidates)
+
+    def instantiate(self, value):
+        return self
 
 
 class SensoryMotorSystem:
@@ -360,4 +380,7 @@ class SensoryMotorSystem:
             raise ValueError('Selected behavior cannot be None')
 
         # Instantiate a motor plan
-        self.motor_plan = self.motor_plan_templates[behavior.type].instantiate(behavior.value)
+        if behavior.action.type == 'move':
+            self.motor_plan = self.motor_plan_templates[behavior.action.value].instantiate(behavior.action.value)
+        else:
+            self.motor_plan = self.motor_plan_templates[behavior.action.type].instantiate(behavior.action.value)
