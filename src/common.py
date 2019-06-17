@@ -7,15 +7,23 @@ from scipy.special import softmax
 
 SensoryScene = collections.namedtuple('SensoryScene', ['observation', 'outcome', 'gameover'])
 
+EPSILON = 0.000001
 
 class SensoryMemory:
-    def __init__(self):
+    def __init__(self, feature_detectors):
         self.sensory_scene = []
+        self._feature_detectors = feature_detectors
 
     def receive_sensors(self, environment):
         obs, reward, done, info = environment.step(action=None)
 
-        self.sensory_scene = SensoryScene(observation=obs, outcome=reward, gameover=done)
+        sensory_scene_content = []
+
+        for fd in self._feature_detectors:
+            sensory_scene_content.append(fd.apply((obs, reward)))
+
+        self.sensory_scene = SensoryScene(observation=sensory_scene_content,
+                                          outcome=reward, gameover=done)
 
 
 class FeatureDetector:
@@ -23,8 +31,13 @@ class FeatureDetector:
         self._concept = concept
         self._similarity_metric = similarity_metric
 
+    @property
+    def concept(self):
+        return self._concept
+
     def apply(self, content):
-        return self._similarity_metric(content)
+        return CognitiveContent(self._concept,
+                                activation=self._similarity_metric(content))
 
 
 class PerceptualAssociativeMemory:
@@ -58,18 +71,18 @@ class PerceptualAssociativeMemory:
 
 class CognitiveContent:
 
-    def __init__(self, content, affective_valence=0.0):
-        self.content = list(content)
+    def __init__(self, content, affective_valence=0.0, activation=0.0):
+        self.content = content
 
         # Activation and Incentive Salience Parameters
         self.base_level_activation = 0.0
         self.base_level_incentive_salience = 0.0
-        self.current_activation = 0.0
+        self.current_activation = activation
         self.current_incentive_salience = 0.0
 
         # Affective Valence Sign (either +1.0 or -1.0 when set)
         # --- only used for feeling nodes
-        self.affective_valence = None
+        self.affective_valence = affective_valence
 
         # Metadata
         self.virtual = False
@@ -78,6 +91,24 @@ class CognitiveContent:
     @property
     def salience(self):
         return self.activation + self.incentive_salience
+
+    @property
+    def current_activation(self):
+        # TODO: Need to iterate over all content to calculate the total activation
+        return self._current_activation
+
+    @current_activation.setter
+    def current_activation(self, curr_act):
+        self._current_activation = curr_act
+
+    @property
+    def base_level_activation(self):
+        # TODO: Need to iterate over all content to calculate the total activation
+        return self._bla
+
+    @base_level_activation.setter
+    def base_level_activation(self, bla):
+        self._bla = bla
 
     @property
     def activation(self):
@@ -92,14 +123,8 @@ class CognitiveContent:
     def __iter__(self):
         return iter(self.content)
 
-
-class AttentionCodelet:
-    def __init__(self, select=lambda x: True):
-        self._select = select
-
-    def apply(self, workspace):
-        return list(filter(self._select, workspace.csm))
-
+    def __str__(self):
+        return str(self.content.__class__)+'('+str(self.content)+')'
 
 class StructureBuildingCodelet:
     def __init__(self, select=lambda x: True, transform=lambda x: x, id=None):
@@ -111,30 +136,45 @@ class StructureBuildingCodelet:
     def apply(self, workspace):
         return list(map(self._transform, filter(self._select, workspace.csm)))
 
+class Decay:
+    def __init__(self, content):
+       for elem in content:
+           elem.current_activation -= .5
+
+class GarbageCollector:
+    def __init__(self, content, activation_type=CognitiveContent.base_level_activation):
+        for elem in content:
+            # TODO: replace current activation with activation_type
+            # TODO:     'CognitiveContent' object has no attribute 'activation_type'
+            if elem and activation_type.__get__(elem) < EPSILON :
+                content.remove(elem)
+
 
 class CurrentSituationalModel:
     def __init__(self):
-        self._content = [None]
+        self._content = []
 
         self.perceptual_scene = None
 
     def receive_content(self, content):
+
+        GarbageCollector(self._content, CognitiveContent.current_activation)
+
         if content is None or len(content) == 0:
             return
 
-        if not isinstance(content, CognitiveContent):
-            content = CognitiveContent(content)
-            content.current_activation = Workspace.initial_current_activation
+        self._content.extend(content)
 
-        self._content[0] = content
+    @property
+    def content(self):
+        return self._content
 
     def receive_sensory_scene(self, scene):
 
         # TODO: Should be distinct from the sensory scene -- containing both real and virtual content
         # TODO: On calling receive_sensory_scene, the content from the sensory_scene should be integrated
         # TODO: Into the perceptual scene, not overwrite it
-        self.perceptual_scene = scene
-        self.receive_content(scene)
+        self.receive_content(scene.observation)
 
     def __iter__(self):
         return iter(self._content)
@@ -171,6 +211,14 @@ class CueingProcess:
                     workspace.csm.receive_cue([content, cued_content])
 
 
+class AttentionCodelet:
+    def __init__(self, select=lambda x: True):
+        self._select = select
+
+    def apply(self, workspace):
+        return list(filter(self._select, workspace.csm.content))
+
+
 class Coalition:
     def __init__(self, content, attn_codelets):
         self.content = content
@@ -184,7 +232,19 @@ class Coalition:
         # TODO: (1) base-level-activation (of attn codelet)
         # TODO: (2) similarity of content to attn codelet's concerns
         # TODO: (3) salience of cognitive content in structure
-        return self.content.salience
+        return sum([elem.salience for elem in self.content])
+
+    def __repr__(self):
+        def recursive_parse(content):
+            if isinstance(content, list):
+                return str([recursive_parse(elem) for elem in content])
+            elif isinstance(content, CognitiveContent) or isinstance(content, Coalition):
+                return str(content.__class__)+'('+recursive_parse(content.content)+')'
+            elif isinstance(content, str):
+                return content
+            else:
+                return str(content)
+        return recursive_parse(self)
 
 
 class CoalitionManager:
@@ -196,13 +256,18 @@ class CoalitionManager:
         if content is None or len(content) == 0:
             return
 
-        self._candidates.append(Coalition(content[0], attn_codelet))
+        self._candidates.append(Coalition(content, attn_codelet))
 
     @property
     def coalitions(self):
         # TODO: add more sophisticated implementation based on shared content / concerns
         coalitions = self._candidates
-        self._candidates = []
+        new_content = []
+        for coalition in self._candidates:
+            if coalition.activation > .99:
+                new_content.extend(coalition.content)
+        coalitions.append(Coalition(new_content, AttentionCodelet(lambda x: True)))
+        self._candidates=[]
         return coalitions
 
 
@@ -215,6 +280,8 @@ class GlobalWorkspace:
             return
 
         self.coalitions.extend(coalitions)
+
+        GarbageCollector(self.coalitions, Coalition.activation)
 
     @property
     def broadcast(self):

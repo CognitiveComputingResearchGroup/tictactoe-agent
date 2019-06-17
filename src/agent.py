@@ -9,7 +9,22 @@ import gym_tictactoe  # Needed to add 'TicTacToe-v0' into gym registry
 N_STEPS = None
 
 # Module initialization
-sensory_memory = SensoryMemory()
+feature_detectors = [FeatureDetector("win", lambda x: (x[1] > 0)*1.0),
+                     FeatureDetector("lose", lambda x: (x[1] < 0)*1.0)
+                    ]
+mark_dict = {1: 'X', -1: 'O', 0: 'B'}
+
+def lambda_board_detector(mark, pos):
+    return lambda x: (x[0][pos] == mark)*1.0
+
+board_detectors = [FeatureDetector(mark_dict[mark]+'_'+str(pos),
+                                   lambda_board_detector(mark, pos))
+                       for pos in range(9) for mark in [1, -1, 0]
+                  ]
+
+feature_detectors += board_detectors
+
+sensory_memory = SensoryMemory(feature_detectors=feature_detectors)
 workspace = Workspace()
 
 # Feature Detectors
@@ -24,10 +39,9 @@ pam = PerceptualAssociativeMemory(initial_concepts={"board": CognitiveContent("b
 global_workspace = GlobalWorkspace()
 
 # Initial Schemes
-reset_scheme = [Scheme(context=None, action=Action('reset', None), result=None)]
 move_schemes = [Scheme(context=None, action=Action('move', position), result=None) for position in range(9)]
 
-procedural_memory = ProceduralMemory(initial_schemes=reset_scheme + move_schemes, context_match=exact_match_by_board)
+procedural_memory = ProceduralMemory(initial_schemes= move_schemes, context_match=exact_match_by_board)
 action_selection = ActionSelection()
 
 # Motor Plan Templates
@@ -46,8 +60,21 @@ sensory_motor_system = SensoryMotorSystem(motor_plan_templates=mp_templates)
 
 # Create Codelets
 sb_codelets = []
-attn_codelets = [AttentionCodelet()]
+attn_codelets = [AttentionCodelet(lambda x: [x.content, ] if x.content == "happy"
+                                                                                else None),
+                 AttentionCodelet(lambda x: [x.content, ] if x.content == "sad"
+                                                                                else None)
+                ]
+position_nodes = [mark_dict[mark]+'_'+str(pos)
+                  for mark in [1,0,-1] for pos in range(9)]
 
+def lambda_position_attn_codelet(pos_code):
+    return lambda x: x if x.content == pos_code and x.activation > .99 else None
+
+position_attn_codelets = [AttentionCodelet(lambda_position_attn_codelet(pos_code))
+                          for pos_code in position_nodes
+                          ]
+attn_codelets+=position_attn_codelets
 cueable_modules = []
 broadcast_recipients = []
 
@@ -104,6 +131,7 @@ def run(environment, n=None, render=True):
 
         # Conscious broadcast retrieved from global workspace
         broadcast = global_workspace.broadcast
+        print(broadcast)
         if broadcast is not None:
 
             # Broadcast sent to all broadcast recipients
@@ -132,6 +160,7 @@ def run(environment, n=None, render=True):
                 else:
                     raise ValueError('Unexpected actuator value')
 
+                Decay(workspace.csm.content)
         count += 1
 
     return count
