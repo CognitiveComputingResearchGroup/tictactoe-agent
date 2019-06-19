@@ -48,6 +48,8 @@ class TicTacToeEnv(gym.Env):
             info['comment'] = 'No action taken'
             return self._board.asarray(), reward, self._done, info
 
+        action_type, action_value = action
+
         if self._done:
             logger.warning(
                 """
@@ -63,15 +65,15 @@ class TicTacToeEnv(gym.Env):
             return self._board.asarray(), reward, self._done, info
 
         # Verify legal action -- action compatible with current board
-        elif action not in self._board.blanks:
-            logger.warning('Illegal action: ({})'.format(action))
+        elif action_value not in self._board.blanks:
+            logger.warning('Illegal action: ({})'.format(action_value))
 
             reward = self.illegal_move
             info['comment'] = 'illegal action'
 
         else:
             # update board with player's action
-            self._board[action] = X
+            self._board[action_value] = X
 
             # check if player won
             if self._board.has_winner():
@@ -110,7 +112,6 @@ class TicTacToeEnv(gym.Env):
 
     def reset(self):
         self._board = Board()
-
         self._done = False
 
     def render(self, mode='human', close=False):

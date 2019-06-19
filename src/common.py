@@ -5,7 +5,32 @@ import numpy as np
 from scipy.special import expit as sigmoid
 from scipy.special import softmax
 
-SensoryScene = collections.namedtuple('SensoryScene', ['observation', 'outcome', 'gameover'])
+def recursive_repr_parse(content):
+    if isinstance(content, list):
+        return str([recursive_repr_parse(elem) for elem in content])
+    elif isinstance(content, CognitiveContent) or isinstance(content, Coalition):
+        return str(content.__class__)+'('+recursive_repr_parse(content.content)+')'
+    elif isinstance(content, str):
+        return content
+    else:
+        return str(content)
+
+
+def recursive_str_parse(content):
+    if isinstance(content, list):
+        return str([recursive_str_parse(elem) for elem in content])
+    elif isinstance(content, CognitiveContent) or isinstance(content, Coalition):
+        return recursive_str_parse(content.content)
+    elif isinstance(content, str):
+        return content
+    elif isinstance(content, SensoryScene):
+        return '[observation:'+recursive_str_parse(content.observation)+ \
+               '\n outcome:'+recursive_str_parse(content.outcome)+']'
+    else:
+        return str(content)
+
+
+SensoryScene = collections.namedtuple('SensoryScene', ['observation', 'outcome'])
 
 EPSILON = 0.000001
 
@@ -14,16 +39,23 @@ class SensoryMemory:
         self.sensory_scene = []
         self._feature_detectors = feature_detectors
 
-    def receive_sensors(self, environment):
-        obs, reward, done, info = environment.step(action=None)
+    def receive_sensors(self, sensors):
 
         sensory_scene_content = []
 
         for fd in self._feature_detectors:
-            sensory_scene_content.append(fd.apply((obs, reward)))
+            sensory_scene_content.append(fd.apply(sensors))
 
         self.sensory_scene = SensoryScene(observation=sensory_scene_content,
-                                          outcome=reward, gameover=done)
+                                          outcome=sensors[1])
+
+    @property
+    def content(self):
+        return self.sensory_scene
+
+    @property
+    def contents_str(self):
+        return recursive_str_parse(self.sensory_scene)
 
 
 class FeatureDetector:
@@ -50,17 +82,15 @@ class PerceptualAssociativeMemory:
     def receive_cue(self, content):
         cued_content = []
 
-        # "Feature Detectors"
-        if isinstance(SensoryScene, content):
-            board = SensoryScene.observation
-            gameover = SensoryScene.gameover
-            outcome = SensoryScene.outcome
+        if content is None:
+            return None
 
-            cued_content.append([self._concepts["board"], board])
-            cued_content.append([])
+        #TODO: check if content is iterable
 
+        for elem in content:
+            if elem in self._concepts:
+                cued_content.extend([concept for concept in self._concepts if elem == concept])
 
-            return CognitiveContent()
 
         # Recognize winning board (add feeling node with positive affective valence)
 
@@ -123,8 +153,14 @@ class CognitiveContent:
     def __iter__(self):
         return iter(self.content)
 
-    def __str__(self):
+    def __repr__(self):
         return str(self.content.__class__)+'('+str(self.content)+')'
+
+    def __str__(self):
+        return str(self.content)
+
+    def __eq__(self, other):
+        return self.content == other.content if hasattr(other, "content") else False
 
 class StructureBuildingCodelet:
     def __init__(self, select=lambda x: True, transform=lambda x: x, id=None):
@@ -142,12 +178,12 @@ class Decay:
            elem.current_activation -= .5
 
 class GarbageCollector:
-    def __init__(self, content, activation_type=CognitiveContent.base_level_activation):
-        for elem in content:
+    def __init__(self, module, activation_type=CognitiveContent.base_level_activation):
+        for elem in module.content.copy():
             # TODO: replace current activation with activation_type
             # TODO:     'CognitiveContent' object has no attribute 'activation_type'
             if elem and activation_type.__get__(elem) < EPSILON :
-                content.remove(elem)
+                module.content.remove(elem)
 
 
 class CurrentSituationalModel:
@@ -158,8 +194,6 @@ class CurrentSituationalModel:
 
     def receive_content(self, content):
 
-        GarbageCollector(self._content, CognitiveContent.current_activation)
-
         if content is None or len(content) == 0:
             return
 
@@ -168,6 +202,10 @@ class CurrentSituationalModel:
     @property
     def content(self):
         return self._content
+
+    @property
+    def contents_str(self):
+        return recursive_str_parse(self._content)
 
     def receive_sensory_scene(self, scene):
 
@@ -212,7 +250,8 @@ class CueingProcess:
 
 
 class AttentionCodelet:
-    def __init__(self, select=lambda x: True):
+    def __init__(self, select=lambda x: True, tag=''):
+        self.tag = tag
         self._select = select
 
     def apply(self, workspace):
@@ -235,16 +274,10 @@ class Coalition:
         return sum([elem.salience for elem in self.content])
 
     def __repr__(self):
-        def recursive_parse(content):
-            if isinstance(content, list):
-                return str([recursive_parse(elem) for elem in content])
-            elif isinstance(content, CognitiveContent) or isinstance(content, Coalition):
-                return str(content.__class__)+'('+recursive_parse(content.content)+')'
-            elif isinstance(content, str):
-                return content
-            else:
-                return str(content)
-        return recursive_parse(self)
+        return recursive_repr_parse(self)
+
+    def __str__(self):
+        return recursive_str_parse(self.content)
 
 
 class CoalitionManager:
@@ -281,7 +314,6 @@ class GlobalWorkspace:
 
         self.coalitions.extend(coalitions)
 
-        GarbageCollector(self.coalitions, Coalition.activation)
 
     @property
     def broadcast(self):
@@ -290,6 +322,14 @@ class GlobalWorkspace:
             return None
 
         return max(self.coalitions, key=lambda c: c.activation)
+
+    @property
+    def content(self):
+        return self.coalitions
+
+    @property
+    def contents_str(self):
+        return recursive_str_parse(self.coalitions)
 
 
 Action = collections.namedtuple('Action', ['type', 'value'])

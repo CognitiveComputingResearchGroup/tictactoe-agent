@@ -1,4 +1,5 @@
 from common import *
+#from graphics import initialize, draw
 
 import gym
 import sys
@@ -9,8 +10,8 @@ import gym_tictactoe  # Needed to add 'TicTacToe-v0' into gym registry
 N_STEPS = None
 
 # Module initialization
-feature_detectors = [FeatureDetector("win", lambda x: (x[1] > 0)*1.0),
-                     FeatureDetector("lose", lambda x: (x[1] < 0)*1.0)
+feature_detectors = [FeatureDetector("happy", lambda x: x[1] if x[1] > 0 else 0.0),
+                     FeatureDetector("sad", lambda x: abs(x[1]) if x[1] < 0 else 0.0)
                     ]
 mark_dict = {1: 'X', -1: 'O', 0: 'B'}
 
@@ -61,26 +62,30 @@ sensory_motor_system = SensoryMotorSystem(motor_plan_templates=mp_templates)
 # Create Codelets
 sb_codelets = []
 attn_codelets = [AttentionCodelet(lambda x: [x.content, ] if x.content == "happy"
-                                                                                else None),
+                                                                                else None, tag="happy"),
                  AttentionCodelet(lambda x: [x.content, ] if x.content == "sad"
-                                                                                else None)
+                                                                                else None, tag="sad")
                 ]
 position_nodes = [mark_dict[mark]+'_'+str(pos)
-                  for mark in [1,0,-1] for pos in range(9)]
+                  for mark in [1, 0, -1] for pos in range(9)]
 
 def lambda_position_attn_codelet(pos_code):
     return lambda x: x if x.content == pos_code and x.activation > .99 else None
 
-position_attn_codelets = [AttentionCodelet(lambda_position_attn_codelet(pos_code))
+position_attn_codelets = [AttentionCodelet(lambda_position_attn_codelet(pos_code), tag=pos_code)
                           for pos_code in position_nodes
                           ]
 attn_codelets+=position_attn_codelets
-cueable_modules = []
+cueable_modules = [pam]
 broadcast_recipients = []
 
 # Initialize Cueing Process
-cue = CueingProcess(cueable_modules)
+cue_process = CueingProcess(cueable_modules)
 coalition_manager = CoalitionManager()
+
+removal_activation = {CurrentSituationalModel: CognitiveContent.current_activation,
+                      GlobalWorkspace: Coalition.activation
+                     }
 
 
 def running(step, last=None):
@@ -101,14 +106,17 @@ def run(environment, n=None, render=True):
     """
     count = 0
 
+    motor_command = None
+
     while running(count, n):
 
         # Display environment state for human consumption
         if render:
             environment.render()
 
+        obs, reward, done, info = environment.step(motor_command)
         # Process sensors into modality specific representations
-        sensory_memory.receive_sensors(environment)
+        sensory_memory.receive_sensors((obs, reward))
 
         # Integrate sensory scene into workspace
         workspace.csm.receive_sensory_scene(sensory_memory.sensory_scene)
@@ -120,7 +128,7 @@ def run(environment, n=None, render=True):
         workspace.csm.receive_content(sbc_content)
 
         # Cueing process
-        cued_content = cue.process(workspace)
+        cued_content = cue_process.process(workspace)
         workspace.csm.receive_content(cued_content)
 
         # Attention codelets scan workspace and select content of interest
@@ -153,14 +161,14 @@ def run(environment, n=None, render=True):
 
                 # Action execution - conceptually we can think of this as 2 actuators:
                 # a move actuator and a reset actuator
-                if motor_command.actuator == 'reset':
-                    environment.reset()
-                elif motor_command.actuator == 'move':
-                    environment.step(motor_command.value)
-                else:
-                    raise ValueError('Unexpected actuator value')
 
-                Decay(workspace.csm.content)
+#                draw([sensory_memory, workspace.csm, global_workspace])
+                import time
+#                time.sleep(10)
+
+            Decay(workspace.csm.content)
+            for module in [workspace.csm, global_workspace]:
+                GarbageCollector(module, removal_activation[type(module)])
         count += 1
 
     return count
