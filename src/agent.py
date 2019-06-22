@@ -1,24 +1,93 @@
 from common import *
+from graphics import initialize, draw
+
+import gym
+import sys
+sys.path.append("..")
+import gym_tictactoe  # Needed to add 'TicTacToe-v0' into gym registry
 
 # Number of cognitive cycles to execute (None -> forever)
-N_STEPS = 1
+N_STEPS = None
 
 # Module initialization
-environment = Environment()
-sensory_memory = SensoryMemory()
+#TODO: 'happy' and 'sad' should be interpretive feeling nodes (like 'sweetness' related feeling node)
+feature_detectors = [FeatureDetector("happy", lambda x: x[1] if x[1] > 0 else 0.0),
+                     FeatureDetector("sad", lambda x: abs(x[1]) if x[1] < 0 else 0.0)
+                    ]
+mark_dict = {1: 'X', -1: 'O', 0: 'B'}
+
+def lambda_mark_detector(mark, pos):
+    return lambda x: (x[0][pos] == mark)*1.0
+
+mark_detectors = [FeatureDetector(mark_dict[mark]+'_'+str(pos),
+                                   lambda_mark_detector(mark, pos))
+                       for pos in range(9) for mark in [1, -1, 0]
+                  ]
+
+feature_detectors += mark_detectors
+
+sensory_memory = SensoryMemory(feature_detectors=feature_detectors)
 workspace = Workspace()
-pam = PerceptualAssociativeMemory()
-cue = CueingProcess()
+
+# Feature Detectors
+
+pam = PerceptualAssociativeMemory(initial_concepts={"board": CognitiveContent("board"),
+                                                    #TODO: affective_valence is really valence
+                                                    "happy": CognitiveContent("happy", affective_valence=1.0),
+                                                    "sad": CognitiveContent("sad", affective_valence=-1.0),
+                                                    "win": CognitiveContent("win"),
+                                                    "lose": CognitiveContent("lose"),
+                                                    "draw": CognitiveContent("draw")})
 global_workspace = GlobalWorkspace()
-procedural_memory = ProceduralMemory(
-    initial_schemes=[Scheme(context=None, action=Move(position, 'X'), result=None) for position in range(9)],
-    context_match=exact_match_context_by_move)
 
+# Initial Schemes
+move_schemes = [Scheme(context=None, action=Action('move', position), result=None) for position in range(9)]
+
+procedural_memory = ProceduralMemory(initial_schemes= move_schemes, context_match=exact_match_by_board)
 action_selection = ActionSelection()
-sensory_motor_system = SensoryMotorSystem()
 
+# Motor Plan Templates
+reset_mpt = MotorPlanTemplate(motor_commands=[MotorCommand(actuator='reset', value=None)],
+                              triggers=[lambda mc: True],
+                              choice_function=lambda mcs: random.choice(mcs))
+
+mp_templates = {i: MotorPlanTemplate(motor_commands=[MotorCommand(actuator='move', value=i)],
+                             triggers=[lambda mc: True],
+                             choice_function=lambda mcs: random.choice(mcs))
+                                    for i in range(10) }
+
+mp_templates['reset'] = reset_mpt
+
+sensory_motor_system = SensoryMotorSystem(motor_plan_templates=mp_templates)
+
+# Create Codelets
 sb_codelets = []
-attn_codelets = [AttentionCodelet()]
+attn_codelets = [AttentionCodelet(lambda x: x.content == "happy", tag="happy"),
+                 AttentionCodelet(lambda x: x.content == "sad", tag="sad")
+                ]
+position_nodes = [mark_dict[mark]+'_'+str(pos)
+                  for mark in [1, 0, -1] for pos in range(9)]
+
+def lambda_mark_attn_codelet(pos_code):
+    return lambda x: x.content == pos_code and x.activation > .99
+
+default_attn_codelet = [AttentionCodelet(lambda x: x.activation > .99, tag='default_attn_codelet')]
+
+mark_attn_codelets = [AttentionCodelet(lambda_mark_attn_codelet(pos_code), tag=pos_code)
+                          for pos_code in position_nodes
+                          ]
+attn_codelets+=mark_attn_codelets
+attn_codelets+=default_attn_codelet
+cueable_modules = [pam]
+broadcast_recipients = []
+
+# Initialize Cueing Process
+cue_process = CueingProcess(cueable_modules)
+coalition_manager = CoalitionManager()
+
+removal_activation = {CurrentSituationalModel: CognitiveContent.current_activation,
+                      GlobalWorkspace: Coalition.activation
+                     }
 
 
 def running(step, last=None):
@@ -32,63 +101,84 @@ def running(step, last=None):
     return True if last is None else step < last
 
 
-def run(n=None):
+def run(environment, n=None, render=True):
     """
     Main control loop of agent.  Runs for n cognitive cycles.  If n is not specified, it will run forever.
     :param n: number of cognitive cycles to execute
     """
     count = 0
+
+    motor_command = None
+
     while running(count, n):
-        # Update sensory memory from next environment state
-        sensory_memory(next(environment))
 
-        # Update the pre-conscious workspace with next sensory memory state
-        workspace(next(sensory_memory))
+        # Display environment state for human consumption
+        if render:
+            environment.render()
 
-        # Structure building codelets scan and update pre-conscious workspace
+        obs, reward, done, info = environment.step(motor_command)
+        # Process sensors into modality specific representations
+        draw(sender=environment, receiver=sensory_memory, content= (obs,reward))
+        sensory_memory.receive_sensors((obs, reward))
+
+        # Integrate sensory scene into workspace
+        workspace.csm.receive_sensory_scene(sensory_memory.sensory_scene)
+
+        # Structure building codelets scan the workspace, potentially creating new content
+        sbc_content = []
         for codelet in sb_codelets:
-            codelet(workspace)
-            workspace(next(codelet))
+            sbc_content.append(codelet.apply(workspace))
+        workspace.csm.receive_content(sbc_content)
 
-        # Cue PAM from next workspace content
-        cue(next(workspace), pam)
+        # Cueing process
+        cued_content = cue_process.process(workspace)
+        workspace.csm.receive_content(cued_content)
 
-        # Update pre-conscious workspace with cued memories
-        for content in next(cue):
-            workspace(content)
-
-        # Attention codelets scan pre-conscious workspace and add coalitions to global workspace
+        # Attention codelets scan workspace and select content of interest
         for codelet in attn_codelets:
-            codelet(workspace)
-            global_workspace(next(codelet))
+            coalition_manager.receive(codelet, codelet.apply(workspace))
+
+        global_workspace.receive_coalitions(coalition_manager.coalitions)
 
         # Conscious broadcast retrieved from global workspace
-        broadcast = next(global_workspace)
+        broadcast = global_workspace.broadcast
+        print(broadcast)
+        if broadcast is not None:
 
-        # Update procedural memory based on conscious broadcast
-        procedural_memory.receive_broadcast(broadcast)
-        candidate_behaviors = procedural_memory.candidate_behaviors
+            # Broadcast sent to all broadcast recipients
+            for module in broadcast_recipients:
+                module.receive_broadcast(broadcast)
 
-        # Update action selection from procedural memory
-        action_selection(candidate_behaviors)
+            action_selection.receive_behaviors(procedural_memory.candidate_behaviors)
 
-        # Retrieve next action and associated expectation codelet from action selection
-        behavior, exp_codelet = next(action_selection)
+            # Process selected behavior
+            selected_behavior = action_selection.selected_behavior
+            if selected_behavior is not None:
+                # Expectation codelet created from selected behavior
+                attn_codelets.append(AttentionCodelet(select=lambda x: x == selected_behavior.result))
 
-        # Add expectation codelet to set of attention codelets
-        if exp_codelet is not None:
-            attn_codelets.append(exp_codelet)
+                sensory_motor_system.receive_selected_behavior(selected_behavior)
 
-        # Update sensory motor memory based on selected action
-        sensory_motor_system(behavior)
+                motor_plan = sensory_motor_system.motor_plan
+                motor_command = motor_plan.choose_motor_command(sensory_memory.sensory_scene)
 
-        # Update environment from sensory motor system's motor plan
-        environment(next(sensory_motor_system))
+                # Action execution - conceptually we can think of this as 2 actuators:
+                # a move actuator and a reset actuator
 
+                draw([sensory_memory, workspace.csm, global_workspace])
+                import time
+                time.sleep(2)
+
+            Decay(workspace.csm.content)
+            for module in [workspace.csm, global_workspace]:
+                GarbageCollector(module, removal_activation[type(module)])
         count += 1
 
     return count
 
 
 if __name__ == '__main__':
-    run(N_STEPS)
+    environment = gym.make('TicTacToe-v0')
+    environment.reset()
+
+    run(environment, n=N_STEPS)
