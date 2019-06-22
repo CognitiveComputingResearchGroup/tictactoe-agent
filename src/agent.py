@@ -1,5 +1,5 @@
 from common import *
-#from graphics import initialize, draw
+from graphics import initialize, draw
 
 import gym
 import sys
@@ -10,20 +10,21 @@ import gym_tictactoe  # Needed to add 'TicTacToe-v0' into gym registry
 N_STEPS = None
 
 # Module initialization
+#TODO: 'happy' and 'sad' should be interpretive feeling nodes (like 'sweetness' related feeling node)
 feature_detectors = [FeatureDetector("happy", lambda x: x[1] if x[1] > 0 else 0.0),
                      FeatureDetector("sad", lambda x: abs(x[1]) if x[1] < 0 else 0.0)
                     ]
 mark_dict = {1: 'X', -1: 'O', 0: 'B'}
 
-def lambda_board_detector(mark, pos):
+def lambda_mark_detector(mark, pos):
     return lambda x: (x[0][pos] == mark)*1.0
 
-board_detectors = [FeatureDetector(mark_dict[mark]+'_'+str(pos),
-                                   lambda_board_detector(mark, pos))
+mark_detectors = [FeatureDetector(mark_dict[mark]+'_'+str(pos),
+                                   lambda_mark_detector(mark, pos))
                        for pos in range(9) for mark in [1, -1, 0]
                   ]
 
-feature_detectors += board_detectors
+feature_detectors += mark_detectors
 
 sensory_memory = SensoryMemory(feature_detectors=feature_detectors)
 workspace = Workspace()
@@ -31,9 +32,9 @@ workspace = Workspace()
 # Feature Detectors
 
 pam = PerceptualAssociativeMemory(initial_concepts={"board": CognitiveContent("board"),
+                                                    #TODO: affective_valence is really valence
                                                     "happy": CognitiveContent("happy", affective_valence=1.0),
                                                     "sad": CognitiveContent("sad", affective_valence=-1.0),
-                                                    "gameover": CognitiveContent("gameover"),
                                                     "win": CognitiveContent("win"),
                                                     "lose": CognitiveContent("lose"),
                                                     "draw": CognitiveContent("draw")})
@@ -61,21 +62,22 @@ sensory_motor_system = SensoryMotorSystem(motor_plan_templates=mp_templates)
 
 # Create Codelets
 sb_codelets = []
-attn_codelets = [AttentionCodelet(lambda x: [x.content, ] if x.content == "happy"
-                                                                                else None, tag="happy"),
-                 AttentionCodelet(lambda x: [x.content, ] if x.content == "sad"
-                                                                                else None, tag="sad")
+attn_codelets = [AttentionCodelet(lambda x: x.content == "happy", tag="happy"),
+                 AttentionCodelet(lambda x: x.content == "sad", tag="sad")
                 ]
 position_nodes = [mark_dict[mark]+'_'+str(pos)
                   for mark in [1, 0, -1] for pos in range(9)]
 
-def lambda_position_attn_codelet(pos_code):
-    return lambda x: x if x.content == pos_code and x.activation > .99 else None
+def lambda_mark_attn_codelet(pos_code):
+    return lambda x: x.content == pos_code and x.activation > .99
 
-position_attn_codelets = [AttentionCodelet(lambda_position_attn_codelet(pos_code), tag=pos_code)
+default_attn_codelet = [AttentionCodelet(lambda x: x.activation > .99, tag='default_attn_codelet')]
+
+mark_attn_codelets = [AttentionCodelet(lambda_mark_attn_codelet(pos_code), tag=pos_code)
                           for pos_code in position_nodes
                           ]
-attn_codelets+=position_attn_codelets
+attn_codelets+=mark_attn_codelets
+attn_codelets+=default_attn_codelet
 cueable_modules = [pam]
 broadcast_recipients = []
 
@@ -116,6 +118,7 @@ def run(environment, n=None, render=True):
 
         obs, reward, done, info = environment.step(motor_command)
         # Process sensors into modality specific representations
+        draw(sender=environment, receiver=sensory_memory, content= (obs,reward))
         sensory_memory.receive_sensors((obs, reward))
 
         # Integrate sensory scene into workspace
@@ -162,9 +165,9 @@ def run(environment, n=None, render=True):
                 # Action execution - conceptually we can think of this as 2 actuators:
                 # a move actuator and a reset actuator
 
-#                draw([sensory_memory, workspace.csm, global_workspace])
+                draw([sensory_memory, workspace.csm, global_workspace])
                 import time
-#                time.sleep(10)
+                time.sleep(2)
 
             Decay(workspace.csm.content)
             for module in [workspace.csm, global_workspace]:

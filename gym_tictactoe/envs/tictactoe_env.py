@@ -5,7 +5,7 @@ import gym
 import numpy as np
 from gym import spaces
 
-#from gym_tictactoe.envs import graphics as ttt_graphics
+from gym_tictactoe.envs import graphics as ttt_graphics
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ class TicTacToeEnv(gym.Env):
 
     def render(self, mode='human', close=False):
         if mode == 'human':
-            #ttt_graphics.draw(self._board.asarray())
+            ttt_graphics.draw(self._board.asarray())
             print(self._board)
         else:
             return self._board.asarray()

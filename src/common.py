@@ -295,11 +295,11 @@ class CoalitionManager:
     def coalitions(self):
         # TODO: add more sophisticated implementation based on shared content / concerns
         coalitions = self._candidates
-        new_content = []
-        for coalition in self._candidates:
-            if coalition.activation > .99:
-                new_content.extend(coalition.content)
-        coalitions.append(Coalition(new_content, AttentionCodelet(lambda x: True)))
+        #new_content = []
+        #for coalition in self._candidates:
+        #    if coalition.activation > .99:
+        #        new_content.extend(coalition.content)
+        #coalitions.append(Coalition(new_content, AttentionCodelet(lambda x: True)))
         self._candidates=[]
         return coalitions
 
