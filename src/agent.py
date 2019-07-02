@@ -76,8 +76,8 @@ default_attn_codelet = [AttentionCodelet(lambda x: x.activation > .99,
 mark_attn_codelets = [AttentionCodelet(lambda_mark_attn_codelet(pos_code), tag=pos_code)
                           for pos_code in position_nodes
                           ]
-attn_codelets+=mark_attn_codelets
-attn_codelets+=default_attn_codelet
+#attn_codelets += mark_attn_codelets
+attn_codelets += default_attn_codelet
 cueable_modules = [pam]
 broadcast_recipients = [procedural_memory]
 
@@ -156,7 +156,10 @@ def run(environment, n=None, render=True):
             selected_behavior = action_selection.selected_behavior
             if selected_behavior is not None:
                 # Expectation codelet created from selected behavior
-                attn_codelets.append(AttentionCodelet(select=lambda x: x == selected_behavior.result))
+                if selected_behavior.result is None:
+                    attn_codelets.append(ExpectationCodelet(scheme=selected_behavior, select=lambda x: x.activation > .99, tag='exp'))
+                else:
+                    attn_codelets.append(ExpectationCodelet(scheme=selected_behavior, select=lambda x: x in selected_behavior.result and x.activation > .99, tag='exp'))
 
                 sensory_motor_system.receive_selected_behavior(selected_behavior)
 

@@ -92,7 +92,7 @@ class PerceptualAssociativeMemory:
         pass
 
     def receive_cue(self, content):
-        cued_content = []
+        cued_content = {}
 
         if content is None:
             return None
@@ -417,7 +417,7 @@ Action = collections.namedtuple('Action', ['type', 'value'])
 
 
 class Scheme:
-    def __init__(self, context=None, action=None, result=None, current_activation=0.0, base_level_activation=0.0):
+    def __init__(self, context=None, action=None, result=None, current_activation=0.0, base_level_activation=0.5):
         self.context = context
         self.action = action
         self.result = result
@@ -429,6 +429,15 @@ class Scheme:
     def activation(self):
         return self.current_activation + self.base_level_activation
 
+    def duplicate(self):
+        return self.__class__(context=self.context,
+                              action=self.action,
+                              result=self.result,
+                              current_activation=self.current_activation,
+                              base_level_activation=self.base_level_activation)
+
+    def __repr__(self):
+        return '<'+str([str(self.context),str(self.action),str(self.result)])+':'+str(self.base_level_activation)+'>'
 
 class ProceduralMemory:
 
@@ -455,10 +464,36 @@ class ProceduralMemory:
 
         return candidate_behaviors
 
+    def activate_schemes(self, broadcast):
+        for scheme in self._schemes.copy():
+            if scheme.context is None:
+                new_scheme = scheme.duplicate()
+                new_scheme.current_activation = 1.0
+                new_scheme.context = broadcast.content
+                self._schemes.append(new_scheme)
+            else:
+                scheme.current_activation = match_pct(scheme.context, broadcast.content)
+
     def receive_broadcast(self, broadcast):
         if broadcast is None:
             return
 
+        self.activate_schemes(broadcast)
+
+        if isinstance(broadcast.attn_codelets, ExpectationCodelet):
+            scheme = broadcast.attn_codelets.scheme
+
+            #Learn
+            if scheme.result is not None:
+                Learn([scheme], match_pct(scheme.result, broadcast.content))
+
+            #Duplicate
+
+            if scheme.result is None or match_pct(scheme.result, broadcast.content)<1.0:
+                new_scheme = scheme.duplicate()
+                new_scheme.result = broadcast.content
+                self._schemes.append(new_scheme)
+        '''
         def similarity(scheme):
             return self._context_match(scheme, broadcast) + self._result_match(scheme, broadcast)
 
@@ -469,6 +504,7 @@ class ProceduralMemory:
             self._schemes[index].current_activation = activation
 
         self._learn(broadcast)
+        '''
 
     def receive_selected_behavior(self, behavior):
         self.recently_selected_behaviors.append(behavior)
@@ -518,7 +554,16 @@ class ActionSelection:
 
         # TODO: need more sophisticated action selection that includes incentive salience of results
         # TODO: to determine the most "valueable" action to choose.
-        return max(self.behaviors, key=lambda c: c.activation)
+        def value_function(b):
+            value = b.activation
+            if b.result is not None:
+                value += sum([elem.incentive_salience for elem in b.result])
+            return value
+
+        max_value = value_function(max(self.behaviors, key=lambda b: value_function(b)))
+        selected_behavior = np.random.choice([behavior for behavior in self.behaviors
+                                              if value_function(behavior) == max_value])
+        return selected_behavior
 
 
 MotorCommand = collections.namedtuple('MotorCommand', ['actuator', 'value'])
