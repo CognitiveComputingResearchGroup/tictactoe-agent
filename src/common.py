@@ -4,6 +4,7 @@ import random
 import numpy as np
 from scipy.special import expit as sigmoid
 from scipy.special import softmax
+from scipy.stats import norm
 
 def recursive_repr_parse(content):
     if isinstance(content, list):
@@ -28,6 +29,17 @@ def recursive_str_parse(content):
                '\n outcome:'+recursive_str_parse(content.outcome)+']'
     else:
         return str(content)
+
+def match_pct(content1, content2):
+    '''
+    Returns how much the two content match/ are similar.
+    :param content1:
+    :param content2:
+    :return: pct: percentage of match 0.0<=pct<=1.0
+    '''
+    intersection = set(content1).intersection(set(content2))
+    union = set(content1).union(set(content2))
+    return float(len(intersection))/len(union)
 
 
 SensoryScene = collections.namedtuple('SensoryScene', ['observation', 'outcome'])
@@ -87,26 +99,24 @@ class PerceptualAssociativeMemory:
 
         #TODO: check if content is iterable
 
-        for elem in content:
-            if elem in self._concepts:
-                cued_content.extend([concept for concept in self._concepts if elem == concept])
-
+        #TODO: Need to look at a broader definition of cueing and approximate matching
+        cued_content = [concept for concept in self._concepts if content == concept]
 
         # Recognize winning board (add feeling node with positive affective valence)
 
         # Recognize losing board (add feeling node with negative affective valence)
 
-        return None
+        return cued_content
 
 
 class CognitiveContent:
 
-    def __init__(self, content, affective_valence=0.0, activation=0.0):
+    def __init__(self, content, affective_valence=0.0, activation=0.0, blis=0.0):
         self.content = content
 
         # Activation and Incentive Salience Parameters
         self.base_level_activation = 0.0
-        self.base_level_incentive_salience = 0.0
+        self.base_level_incentive_salience = blis
         self.current_activation = activation
         self.current_incentive_salience = 0.0
 
@@ -148,7 +158,12 @@ class CognitiveContent:
     @property
     def incentive_salience(self):
         # TODO: Need to iterate over all content to calculate the total incentive salience
-        return self.current_incentive_salience + self.base_level_incentive_salience
+        incentive_salience = 0
+        if self.affective_valence != 0.0: # this means it is a drive feeling node
+            incentive_salience = self.affective_valence*self.activation
+        else:
+            incentive_salience = self.current_incentive_salience + self.base_level_incentive_salience
+        return incentive_salience
 
     def __iter__(self):
         return iter(self.content)
@@ -162,6 +177,9 @@ class CognitiveContent:
     def __eq__(self, other):
         return self.content == other.content if hasattr(other, "content") else False
 
+    def __hash__(self):
+        return hash(self.content)
+
 class StructureBuildingCodelet:
     def __init__(self, select=lambda x: True, transform=lambda x: x, id=None):
         self._select = select
@@ -173,17 +191,35 @@ class StructureBuildingCodelet:
         return list(map(self._transform, filter(self._select, workspace.csm)))
 
 class Decay:
-    def __init__(self, content):
+    def __init__(self, content, function=lambda x: x, factor=1):
        for elem in content:
-           elem.current_activation -= .5
+           elem.current_activation -= function(.5)*factor
+
+
+class Learn:
+    def __init__(self, content, factor=1):
+       for elem in content:
+           elem.base_level_activation += .5*factor
+
+
+class Forget:
+    def __init__(self, content, factor=1):
+        for elem in content:
+            elem.base_level_activation -= .01*factor
+
 
 class GarbageCollector:
-    def __init__(self, module, activation_type=CognitiveContent.base_level_activation):
-        for elem in module.content.copy():
+    def __init__(self, module, activation_type='base_level_activation'):
+        if isinstance(module, list):
+            content = module
+        else:
+            content = module.content
+
+        for elem in content.copy():
             # TODO: replace current activation with activation_type
             # TODO:     'CognitiveContent' object has no attribute 'activation_type'
-            if elem and activation_type.__get__(elem) < EPSILON :
-                module.content.remove(elem)
+            if elem and getattr(elem, activation_type) < EPSILON :
+                content.remove(elem)
 
 
 class CurrentSituationalModel:
@@ -198,6 +234,15 @@ class CurrentSituationalModel:
             return
 
         self._content.extend(content)
+
+    def receive_cued_content(self, cue):
+        if len(cue[1]) > 0:
+            self._content.remove(cue[0])
+            self._content.extend(cue[1])
+
+        for elem in cue[1]:
+            elem.current_activation = cue[0].current_activation
+
 
     @property
     def content(self):
@@ -246,16 +291,52 @@ class CueingProcess:
                 cued_content = module.receive_cue(content)
 
                 if cued_content is not None:
-                    workspace.csm.receive_cue([content, cued_content])
+                    workspace.csm.receive_cued_content([content, cued_content])
 
 
 class AttentionCodelet:
-    def __init__(self, select=lambda x: True, tag=''):
+    def __init__(self, select=lambda x: True, tag='', current_activation=0.0, base_level_activation=1.0):
         self.tag = tag
         self._select = select
 
+        self._current_activation = current_activation
+        self._base_level_activation = base_level_activation
+
     def apply(self, workspace):
         return list(filter(self._select, workspace.csm.content))
+
+    @property
+    def activation(self):
+        return self.current_activation + self.base_level_activation
+
+    @property
+    def current_activation(self):
+        return self._current_activation
+
+    @current_activation.setter
+    def current_activation(self, value):
+        self._current_activation = value
+
+    @property
+    def base_level_activation(self):
+        return self._base_level_activation
+
+    def __repr__(self):
+        return self.tag
+
+
+class ExpectationCodelet(AttentionCodelet):
+    def __init__(self, scheme, select=lambda x: True, tag=''):
+        AttentionCodelet.__init__(self, select, tag, current_activation=1.0)
+        self.scheme = scheme
+
+    @property
+    def base_level_activation(self):
+        return self.current_activation
+
+    @base_level_activation.setter
+    def base_level_activation(self, value):
+        self._current_activation = value
 
 
 class Coalition:
@@ -271,7 +352,7 @@ class Coalition:
         # TODO: (1) base-level-activation (of attn codelet)
         # TODO: (2) similarity of content to attn codelet's concerns
         # TODO: (3) salience of cognitive content in structure
-        return sum([elem.salience for elem in self.content])
+        return sum([elem.salience for elem in self.content])+self.attn_codelets.activation
 
     def __repr__(self):
         return recursive_repr_parse(self)
@@ -399,6 +480,10 @@ class ProceduralMemory:
 
         # TODO: Need to compare broadcast to results in recently selected behaviors
         pass
+
+    @property
+    def content(self):
+        return self._schemes
 
 
 def exact_match_by_board(content, scheme):

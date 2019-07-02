@@ -31,13 +31,11 @@ workspace = Workspace()
 
 # Feature Detectors
 
-pam = PerceptualAssociativeMemory(initial_concepts={"board": CognitiveContent("board"),
+pam = PerceptualAssociativeMemory(initial_concepts=[
                                                     #TODO: affective_valence is really valence
-                                                    "happy": CognitiveContent("happy", affective_valence=1.0),
-                                                    "sad": CognitiveContent("sad", affective_valence=-1.0),
-                                                    "win": CognitiveContent("win"),
-                                                    "lose": CognitiveContent("lose"),
-                                                    "draw": CognitiveContent("draw")})
+                                                    CognitiveContent("happy", affective_valence=1.0, blis=1.0),
+                                                    CognitiveContent("sad", affective_valence=-1.0, blis=1.0),
+                                                    ])
 global_workspace = GlobalWorkspace()
 
 # Initial Schemes
@@ -71,7 +69,9 @@ position_nodes = [mark_dict[mark]+'_'+str(pos)
 def lambda_mark_attn_codelet(pos_code):
     return lambda x: x.content == pos_code and x.activation > .99
 
-default_attn_codelet = [AttentionCodelet(lambda x: x.activation > .99, tag='default_attn_codelet')]
+default_attn_codelet = [AttentionCodelet(lambda x: x.activation > .99,
+                                         tag='default_attn_codelet',
+                                         base_level_activation=.9)]
 
 mark_attn_codelets = [AttentionCodelet(lambda_mark_attn_codelet(pos_code), tag=pos_code)
                           for pos_code in position_nodes
@@ -79,14 +79,16 @@ mark_attn_codelets = [AttentionCodelet(lambda_mark_attn_codelet(pos_code), tag=p
 attn_codelets+=mark_attn_codelets
 attn_codelets+=default_attn_codelet
 cueable_modules = [pam]
-broadcast_recipients = []
+broadcast_recipients = [procedural_memory]
 
 # Initialize Cueing Process
 cue_process = CueingProcess(cueable_modules)
 coalition_manager = CoalitionManager()
 
-removal_activation = {CurrentSituationalModel: CognitiveContent.current_activation,
-                      GlobalWorkspace: Coalition.activation
+removal_activation = {CurrentSituationalModel: 'current_activation',
+                      GlobalWorkspace: 'activation',
+                      ProceduralMemory: 'base_level_activation',
+                      list: 'base_level_activation'
                      }
 
 
@@ -142,7 +144,6 @@ def run(environment, n=None, render=True):
 
         # Conscious broadcast retrieved from global workspace
         broadcast = global_workspace.broadcast
-        print(broadcast)
         if broadcast is not None:
 
             # Broadcast sent to all broadcast recipients
@@ -165,13 +166,30 @@ def run(environment, n=None, render=True):
                 # Action execution - conceptually we can think of this as 2 actuators:
                 # a move actuator and a reset actuator
 
-                draw([sensory_memory, workspace.csm, global_workspace])
-                import time
-                time.sleep(2)
+        #logging
+        print('broadcast: ', broadcast)
+        print('attn_codelets: ', attn_codelets)
+        print('motor_command: ', motor_command)
+        '''
+        print('schemes: ')
+        for scheme in procedural_memory._schemes:
+            if scheme.current_activation > .5:
+                print(scheme)
+                
+        #draw([sensory_memory, workspace.csm, global_workspace])
+        import time
+        time.sleep(2)
 
-            Decay(workspace.csm.content)
-            for module in [workspace.csm, global_workspace]:
-                GarbageCollector(module, removal_activation[type(module)])
+        '''
+        #housekeeping
+        Decay(workspace.csm.content)
+        Decay(attn_codelets)
+        #Forget(procedural_memory.content)
+        #Forget(procedural_memory.content, function=lambda x: norm.pdf(x, loc=0.5, scale=0.12)*(1.0/50))
+        for module in [workspace.csm, global_workspace, attn_codelets, procedural_memory]:
+            GarbageCollector(module, removal_activation[type(module)])
+
+
         count += 1
 
     return count
