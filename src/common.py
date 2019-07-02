@@ -158,7 +158,6 @@ class CognitiveContent:
     @property
     def incentive_salience(self):
         # TODO: Need to iterate over all content to calculate the total incentive salience
-        incentive_salience = 0
         if self.affective_valence != 0.0: # this means it is a drive feeling node
             incentive_salience = self.affective_valence*self.activation
         else:
@@ -354,6 +353,10 @@ class Coalition:
         # TODO: (3) salience of cognitive content in structure
         return sum([elem.salience for elem in self.content])+self.attn_codelets.activation
 
+    @property
+    def incentive_salience(self):
+        return sum([elem.incentive_salience for elem in self.content])
+
     def __repr__(self):
         return recursive_repr_parse(self)
 
@@ -376,11 +379,6 @@ class CoalitionManager:
     def coalitions(self):
         # TODO: add more sophisticated implementation based on shared content / concerns
         coalitions = self._candidates
-        #new_content = []
-        #for coalition in self._candidates:
-        #    if coalition.activation > .99:
-        #        new_content.extend(coalition.content)
-        #coalitions.append(Coalition(new_content, AttentionCodelet(lambda x: True)))
         self._candidates=[]
         return coalitions
 
@@ -485,7 +483,7 @@ class ProceduralMemory:
 
             #Learn
             if scheme.result is not None:
-                Learn([scheme], match_pct(scheme.result, broadcast.content))
+                Learn([scheme], broadcast.incentive_salience*match_pct(scheme.result, broadcast.content))
 
             #Duplicate
 
