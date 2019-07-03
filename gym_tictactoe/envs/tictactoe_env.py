@@ -8,6 +8,7 @@ from gym import spaces
 from gym_tictactoe.envs import graphics as ttt_graphics
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)
 
 
 class TicTacToeEnv(gym.Env):

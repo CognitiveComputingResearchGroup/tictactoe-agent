@@ -7,7 +7,9 @@ sys.path.append("..")
 import gym_tictactoe  # Needed to add 'TicTacToe-v0' into gym registry
 
 # Number of cognitive cycles to execute (None -> forever)
-N_STEPS = None
+N_STEPS = 1000
+logging = False
+experimenting = True
 
 # Module initialization
 #TODO: 'happy' and 'sad' should be interpretive feeling nodes (like 'sweetness' related feeling node)
@@ -109,6 +111,7 @@ def run(environment, n=None, render=True):
     :param n: number of cognitive cycles to execute
     """
     count = 0
+    total_reward = 0
 
     motor_command = None
 
@@ -119,6 +122,7 @@ def run(environment, n=None, render=True):
             environment.render()
 
         obs, reward, done, info = environment.step(motor_command)
+        total_reward += reward if abs(reward) > .99 else 0.0
         # Process sensors into modality specific representations
         draw(sender=environment, receiver=sensory_memory, content= (obs,reward))
         sensory_memory.receive_sensors((obs, reward))
@@ -150,7 +154,8 @@ def run(environment, n=None, render=True):
             for module in broadcast_recipients:
                 module.receive_broadcast(broadcast)
 
-            action_selection.receive_behaviors(procedural_memory.candidate_behaviors)
+            candidate_behaviors = procedural_memory.candidate_behaviors
+            action_selection.receive_behaviors(candidate_behaviors)
 
             # Process selected behavior
             selected_behavior = action_selection.selected_behavior
@@ -169,21 +174,22 @@ def run(environment, n=None, render=True):
                 # Action execution - conceptually we can think of this as 2 actuators:
                 # a move actuator and a reset actuator
 
-        #logging
-        print('broadcast: ', broadcast)
-        print('attn_codelets: ', attn_codelets)
-        print('motor_command: ', motor_command)
-        '''
-        print('schemes: ')
-        for scheme in procedural_memory._schemes:
-            if scheme.current_activation > .5:
-                print(scheme)
-                
-        #draw([sensory_memory, workspace.csm, global_workspace])
-        import time
-        time.sleep(2)
+        if logging:
+            #logging
+            print('broadcast: ', broadcast)
+            print('attn_codelets: ', attn_codelets)
+            print('selected_behavior: ', selected_behavior)
+            print('motor_command: ', motor_command)
+            print('schemes: ')
+            for scheme in procedural_memory._schemes:
+                if scheme.current_activation > .5:
+                    print(scheme)
 
-        '''
+        if not experimenting:
+            #draw([sensory_memory, workspace.csm, global_workspace])
+            import time
+            time.sleep(2)
+
         #housekeeping
         Decay(workspace.csm.content)
         Decay(attn_codelets)
@@ -195,11 +201,11 @@ def run(environment, n=None, render=True):
 
         count += 1
 
-    return count
+    return count, total_reward
 
 
 if __name__ == '__main__':
     environment = gym.make('TicTacToe-v0')
     environment.reset()
+    print(run(environment, n=N_STEPS, render=not experimenting))
 
-    run(environment, n=N_STEPS)
