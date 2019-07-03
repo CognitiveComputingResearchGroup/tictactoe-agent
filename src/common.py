@@ -81,7 +81,7 @@ class FeatureDetector:
 
     def apply(self, content):
         return CognitiveContent(self._concept,
-                                activation=self._similarity_metric(content))
+                                current_activation=self._similarity_metric(content))
 
 
 class PerceptualAssociativeMemory:
@@ -111,18 +111,18 @@ class PerceptualAssociativeMemory:
 
 class CognitiveContent:
 
-    def __init__(self, content, affective_valence=0.0, activation=0.0, blis=0.0):
+    def __init__(self, content, current_activation=0.0, bla=0.0,
+                 current_incentive_salience=0.0, blis=0.0):
         self.content = content
 
         # Activation and Incentive Salience Parameters
-        self.base_level_activation = 0.0
+        self.base_level_activation = bla
         self.base_level_incentive_salience = blis
-        self.current_activation = activation
-        self.current_incentive_salience = 0.0
+        self.current_activation = current_activation
+        self.current_incentive_salience = current_incentive_salience
 
         # Affective Valence Sign (either +1.0 or -1.0 when set)
         # --- only used for feeling nodes
-        self.affective_valence = affective_valence
 
         # Metadata
         self.virtual = False
@@ -138,8 +138,8 @@ class CognitiveContent:
         return self._current_activation
 
     @current_activation.setter
-    def current_activation(self, curr_act):
-        self._current_activation = curr_act
+    def current_activation(self, current_activation):
+        self._current_activation = current_activation
 
     @property
     def base_level_activation(self):
@@ -158,11 +158,7 @@ class CognitiveContent:
     @property
     def incentive_salience(self):
         # TODO: Need to iterate over all content to calculate the total incentive salience
-        if self.affective_valence != 0.0: # this means it is a drive feeling node
-            incentive_salience = self.affective_valence*self.activation
-        else:
-            incentive_salience = self.current_incentive_salience + self.base_level_incentive_salience
-        return incentive_salience
+        return self.current_incentive_salience + self.base_level_incentive_salience
 
     def __iter__(self):
         return iter(self.content)
@@ -178,6 +174,16 @@ class CognitiveContent:
 
     def __hash__(self):
         return hash(self.content)
+
+class FeelingNode(CognitiveContent):
+
+    def __init__(self, content, affective_valence=0.0, current_activation=0.0, bla=0.0):
+        CognitiveContent.__init__(self, content, current_activation=current_activation, bla=bla)
+        self.affective_valence = affective_valence
+
+    @property
+    def incentive_salience(self):
+        return self.affective_valence*self.activation
 
 class StructureBuildingCodelet:
     def __init__(self, select=lambda x: True, transform=lambda x: x, id=None):

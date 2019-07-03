@@ -35,8 +35,8 @@ workspace = Workspace()
 
 pam = PerceptualAssociativeMemory(initial_concepts=[
                                                     #TODO: affective_valence is really valence
-                                                    CognitiveContent("happy", affective_valence=1.0, blis=1.0),
-                                                    CognitiveContent("sad", affective_valence=-1.0, blis=1.0),
+                                                    FeelingNode("happy", affective_valence=1.0),
+                                                    FeelingNode("sad", affective_valence=-1.0),
                                                     ])
 global_workspace = GlobalWorkspace()
 
