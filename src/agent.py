@@ -4,11 +4,15 @@ from graphics import initialize, draw
 import gym
 import sys
 sys.path.append("..")
+
 import gym_tictactoe  # Needed to add 'TicTacToe-v0' into gym registry
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 # Number of cognitive cycles to execute (None -> forever)
 N_STEPS = 1000
-logging = False
+
 experimenting = True
 
 # Module initialization
@@ -17,6 +21,7 @@ feature_detectors = [FeatureDetector("happy", lambda x: x[1] if x[1] > 0 else 0.
                      FeatureDetector("sad", lambda x: abs(x[1]) if x[1] < 0 else 0.0)
                     ]
 mark_dict = {1: 'X', -1: 'O', 0: 'B'}
+mark_dict_r = {'X':1 , 'O':-1, 'B':0}
 
 def lambda_mark_detector(mark, pos):
     return lambda x: (x[0][pos] == mark)*1.0
@@ -62,22 +67,29 @@ sensory_motor_system = SensoryMotorSystem(motor_plan_templates=mp_templates)
 
 # Create Codelets
 sb_codelets = []
-attn_codelets = [AttentionCodelet(lambda x: x.content == "happy", tag="happy"),
-                 AttentionCodelet(lambda x: x.content == "sad", tag="sad")
+attn_codelets = [AttentionCodelet(lambda x: x.content == "happy",
+                                  tag="happy", domain=workspace.csm),
+                 AttentionCodelet(lambda x: x.content == "sad",
+                                  tag="sad", domain=workspace.csm)
                 ]
 position_nodes = [mark_dict[mark]+'_'+str(pos)
                   for mark in [1, 0, -1] for pos in range(9)]
 
+
 def lambda_mark_attn_codelet(pos_code):
     return lambda x: x.content == pos_code and x.activation > .99
 
+
 default_attn_codelet = [AttentionCodelet(lambda x: x.activation > .99,
                                          tag='default_attn_codelet',
-                                         base_level_activation=.9)]
+                                         base_level_activation=.9,
+                                         domain=workspace.csm
+                                         )]
 
-mark_attn_codelets = [AttentionCodelet(lambda_mark_attn_codelet(pos_code), tag=pos_code)
-                          for pos_code in position_nodes
-                          ]
+mark_attn_codelets = [AttentionCodelet(lambda_mark_attn_codelet(pos_code),
+                                       tag=pos_code, domain=workspace.csm)
+                      for pos_code in position_nodes
+                     ]
 #attn_codelets += mark_attn_codelets
 attn_codelets += default_attn_codelet
 cueable_modules = [pam]
@@ -124,25 +136,26 @@ def run(environment, n=None, render=True):
         obs, reward, done, info = environment.step(motor_command)
         total_reward += reward if abs(reward) > .99 else 0.0
         # Process sensors into modality specific representations
-        draw(sender=environment, receiver=sensory_memory, content= (obs,reward))
+        #draw(sender=environment, receiver=sensory_memory, content= (obs,reward))
         sensory_memory.receive_sensors((obs, reward))
 
         # Integrate sensory scene into workspace
         workspace.csm.receive_sensory_scene(sensory_memory.sensory_scene)
 
+        '''
         # Structure building codelets scan the workspace, potentially creating new content
         sbc_content = []
         for codelet in sb_codelets:
             sbc_content.append(codelet.apply(workspace))
         workspace.csm.receive_content(sbc_content)
-
+        '''
         # Cueing process
         cued_content = cue_process.process(workspace)
         workspace.csm.receive_content(cued_content)
 
         # Attention codelets scan workspace and select content of interest
         for codelet in attn_codelets:
-            coalition_manager.receive(codelet, codelet.apply(workspace))
+            coalition_manager.receive(codelet, codelet.apply())
 
         global_workspace.receive_coalitions(coalition_manager.coalitions)
 
@@ -162,9 +175,15 @@ def run(environment, n=None, render=True):
             if selected_behavior is not None:
                 # Expectation codelet created from selected behavior
                 if selected_behavior.result is None:
-                    attn_codelets.append(ExpectationCodelet(scheme=selected_behavior, select=lambda x: x.activation > .99, tag='exp'))
+                    attn_codelets.append(ExpectationCodelet(scheme=selected_behavior,
+                                                            select=lambda x: x.activation > 0.0,
+                                                            tag='exp',
+                                                            domain=workspace.csm.perceptual_scene))
                 else:
-                    attn_codelets.append(ExpectationCodelet(scheme=selected_behavior, select=lambda x: x in selected_behavior.result and x.activation > .99, tag='exp'))
+                    attn_codelets.append(ExpectationCodelet(scheme=selected_behavior,
+                                                            select=lambda x: x in selected_behavior.result and x.activation > 0.0,
+                                                            tag='exp',
+                                                            domain=workspace.csm.perceptual_scene))
 
                 sensory_motor_system.receive_selected_behavior(selected_behavior)
 
@@ -174,18 +193,26 @@ def run(environment, n=None, render=True):
                 # Action execution - conceptually we can think of this as 2 actuators:
                 # a move actuator and a reset actuator
 
-        if logging:
-            #logging
-            print('broadcast: ', broadcast)
+        logger.debug(('broadcast: ', broadcast))
+        logger.debug(('attn_codelets: ', attn_codelets))
+        logger.debug(('selected_behavior: ', selected_behavior))
+        logger.debug(('motor_command: ', motor_command))
+        if render:
             print('attn_codelets: ', attn_codelets)
+            print('broadcast: ', broadcast)
             print('selected_behavior: ', selected_behavior)
             print('motor_command: ', motor_command)
-            print('schemes: ')
-            for scheme in procedural_memory._schemes:
-                if scheme.current_activation > .5:
-                    print(scheme)
+            print('Strategy:')
+            for i, scheme in enumerate(sorted(procedural_memory.content, key=lambda x: x.base_level_activation, reverse=True)):
+                if i>5:
+                    break
+                print(get_board_string_from_context(scheme.context), scheme.action.value)
+        logger.log(logging.NOTSET, ('schemes: '))
+        for scheme in procedural_memory._schemes:
+            if scheme.current_activation > .5:
+                logger.log(logging.NOTSET, scheme)
 
-        if not experimenting:
+        if render:
             #draw([sensory_memory, workspace.csm, global_workspace])
             import time
             time.sleep(2)
@@ -193,19 +220,29 @@ def run(environment, n=None, render=True):
         #housekeeping
         Decay(workspace.csm.content)
         Decay(attn_codelets)
-        #Forget(procedural_memory.content)
+        Forget(procedural_memory.content)
         #Forget(procedural_memory.content, function=lambda x: norm.pdf(x, loc=0.5, scale=0.12)*(1.0/50))
         for module in [workspace.csm, global_workspace, attn_codelets, procedural_memory]:
             GarbageCollector(module, removal_activation[type(module)])
 
 
         count += 1
+        print(count)
 
     return count, total_reward
 
+def get_board_string_from_context(context):
+    board = [0]*9
+    if context is not None:
+        for elem in context:
+            if not isinstance(elem, FeelingNode):
+                board[int(str(elem)[2])] = mark_dict_r[str(elem)[0]]
+    from gym_tictactoe.envs.tictactoe_env import Board
+    return str(Board.from_list(board))
 
 if __name__ == '__main__':
     environment = gym.make('TicTacToe-v0')
     environment.reset()
     print(run(environment, n=N_STEPS, render=not experimenting))
+
 

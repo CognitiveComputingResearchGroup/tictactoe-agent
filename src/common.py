@@ -1,5 +1,6 @@
 import collections
 import random
+import math
 
 import numpy as np
 from scipy.special import expit as sigmoid
@@ -37,9 +38,13 @@ def match_pct(content1, content2):
     :param content2:
     :return: pct: percentage of match 0.0<=pct<=1.0
     '''
-    intersection = set(content1).intersection(set(content2))
-    union = set(content1).union(set(content2))
-    return float(len(intersection))/len(union)
+    if content1 is None or content2 is None:
+        match = 0
+    else:
+        intersection = set(content1).intersection(set(content2))
+        union = set(content1).union(set(content2))
+        match = float(len(intersection))/len(union)
+    return match
 
 
 SensoryScene = collections.namedtuple('SensoryScene', ['observation', 'outcome'])
@@ -59,6 +64,7 @@ class SensoryMemory:
             sensory_scene_content.append(fd.apply(sensors))
 
         self.sensory_scene = SensoryScene(observation=sensory_scene_content,
+                                          # TODO: outcome is obsolete, remove
                                           outcome=sensors[1])
 
     @property
@@ -175,6 +181,7 @@ class CognitiveContent:
     def __hash__(self):
         return hash(self.content)
 
+
 class FeelingNode(CognitiveContent):
 
     def __init__(self, content, affective_valence=0.0, current_activation=0.0, bla=0.0):
@@ -185,6 +192,7 @@ class FeelingNode(CognitiveContent):
     def incentive_salience(self):
         return self.affective_valence*self.activation
 
+
 class StructureBuildingCodelet:
     def __init__(self, select=lambda x: True, transform=lambda x: x, id=None):
         self._select = select
@@ -194,6 +202,7 @@ class StructureBuildingCodelet:
 
     def apply(self, workspace):
         return list(map(self._transform, filter(self._select, workspace.csm)))
+
 
 class Decay:
     def __init__(self, content, function=lambda x: x, factor=1):
@@ -227,11 +236,30 @@ class GarbageCollector:
                 content.remove(elem)
 
 
+def merge_cue(cue, contents):
+    if len(cue[1]) > 0:
+        contents.remove(cue[0])
+        contents.extend(cue[1])
+
+    # TODO: Need to replace modifying activation here by
+    # TODO:  modifying activation in PAM while cueing
+    for elem in cue[1]:
+        elem.current_activation = cue[0].current_activation
+
+
+class PerceptualScene:
+    def __init__(self, content):
+        self.content = content
+
+    def receive_cued_content(self, cue):
+        merge_cue(cue, self.content)
+
+
 class CurrentSituationalModel:
     def __init__(self):
         self._content = []
 
-        self.perceptual_scene = None
+        self.perceptual_scene = PerceptualScene([])
 
     def receive_content(self, content):
 
@@ -241,13 +269,7 @@ class CurrentSituationalModel:
         self._content.extend(content)
 
     def receive_cued_content(self, cue):
-        if len(cue[1]) > 0:
-            self._content.remove(cue[0])
-            self._content.extend(cue[1])
-
-        for elem in cue[1]:
-            elem.current_activation = cue[0].current_activation
-
+        merge_cue(cue, self.content)
 
     @property
     def content(self):
@@ -263,6 +285,7 @@ class CurrentSituationalModel:
         # TODO: On calling receive_sensory_scene, the content from the sensory_scene should be integrated
         # TODO: Into the perceptual scene, not overwrite it
         self.receive_content(scene.observation)
+        self.perceptual_scene.content = scene.observation
 
     def __iter__(self):
         return iter(self._content)
@@ -285,30 +308,52 @@ class CueingProcess:
     def __init__(self, cueable_modules=None):
         self.cueable_modules = cueable_modules or []
 
+    def cue_for(self, cuee):
+        update_for_perceptual_scene = []
+        for content in cuee.content:
+            for module in self.cueable_modules:
+                cued_content = module.receive_cue(content)
+                if cued_content is not None:
+                    #TODO: merge_cue and CSM.receive_cued_content do the same thing
+                    #TODO: merge cue allows reusability. Need to make code consistent
+                    update_for_perceptual_scene.append([content, cued_content])
+
+        for elem in update_for_perceptual_scene:
+            merge_cue(elem, cuee.content)
+
     def process(self, workspace):
         # TODO: Currently implemented as 2 passes: 1 for perceptual scene and
         # another for generated content in the csm.  Need to rethink this later.
-        for module in self.cueable_modules:
-            module.receive_cue(workspace.csm.perceptual_scene)
 
-        for content in workspace.csm:
-            for module in self.cueable_modules:
-                cued_content = module.receive_cue(content)
+        cue = self.cue_for(workspace.csm.perceptual_scene)
+        if cue is not None:
+            for elem in cue:
+                merge_cue(elem, workspace.csm.perceptual_scene)
 
-                if cued_content is not None:
-                    workspace.csm.receive_cued_content([content, cued_content])
+        cue = self.cue_for(workspace.csm)
+        if cue is not None:
+            for elem in cue:
+                merge_cue(elem, workspace.csm)
 
 
 class AttentionCodelet:
-    def __init__(self, select=lambda x: True, tag='', current_activation=0.0, base_level_activation=1.0):
+    def __init__(self, select=lambda x: True, tag='', domain=None,
+                 current_activation=0.0, base_level_activation=1.0,
+                 ):
         self.tag = tag
         self._select = select
+
+        if domain is None:
+            raise TypeError
+
+        self.domain = domain
 
         self._current_activation = current_activation
         self._base_level_activation = base_level_activation
 
-    def apply(self, workspace):
-        return list(filter(self._select, workspace.csm.content))
+    def apply(self):
+        #TODO: Need to figure out what to do when we have multiple elements in domain
+        return list(filter(self._select, self.domain.content))
 
     @property
     def activation(self):
@@ -331,8 +376,8 @@ class AttentionCodelet:
 
 
 class ExpectationCodelet(AttentionCodelet):
-    def __init__(self, scheme, select=lambda x: True, tag=''):
-        AttentionCodelet.__init__(self, select, tag, current_activation=1.0)
+    def __init__(self, scheme, select=lambda x: True, tag='', domain=[]):
+        AttentionCodelet.__init__(self, select, tag, current_activation=1.0, domain=domain)
         self.scheme = scheme
 
     @property
@@ -342,6 +387,10 @@ class ExpectationCodelet(AttentionCodelet):
     @base_level_activation.setter
     def base_level_activation(self, value):
         self._current_activation = value
+
+    @property
+    def decay_rate(self):
+        return 0.5
 
 
 class Coalition:
@@ -379,7 +428,11 @@ class CoalitionManager:
         if content is None or len(content) == 0:
             return
 
-        self._candidates.append(Coalition(content, attn_codelet))
+        coalition = Coalition(content, attn_codelet)
+
+        self._candidates.append(coalition)
+
+        return
 
     @property
     def coalitions(self):
@@ -488,8 +541,10 @@ class ProceduralMemory:
             scheme = broadcast.attn_codelets.scheme
 
             #Learn
-            if scheme.result is not None:
-                Learn([scheme], broadcast.incentive_salience*match_pct(scheme.result, broadcast.content))
+            '''
+            Learn([scheme], function=math.tanh,
+                  factor=scheme.current_activation*match_pct(scheme.result, broadcast.content))
+            '''
 
             #Duplicate
 
@@ -497,7 +552,7 @@ class ProceduralMemory:
                 new_scheme = scheme.duplicate()
                 new_scheme.result = broadcast.content
                 self._schemes.append(new_scheme)
-        '''
+        ''' 
         def similarity(scheme):
             return self._context_match(scheme, broadcast) + self._result_match(scheme, broadcast)
 
@@ -558,10 +613,10 @@ class ActionSelection:
 
         # TODO: need more sophisticated action selection that includes incentive salience of results
         # TODO: to determine the most "valueable" action to choose.
-        def value_function(b):
-            value = b.activation
-            if b.result is not None:
-                value += sum([elem.incentive_salience for elem in b.result])
+        def value_function(behavior):
+            value = behavior.activation
+            if behavior.result is not None:
+                value += sum([elem.incentive_salience for elem in behavior.result])
             return value
 
         max_value = value_function(max(self.behaviors, key=lambda b: value_function(b)))

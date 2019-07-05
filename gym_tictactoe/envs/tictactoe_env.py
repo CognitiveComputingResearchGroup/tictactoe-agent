@@ -136,6 +136,13 @@ class Board(object):
 
         self._mark_dict = {BLANK: ' ', X: 'X', O: 'O'}
 
+    @classmethod
+    def from_list(cls, board):
+        obj = Board(int(len(board)**.5))
+        obj._board = board
+        return obj
+
+
     @property
     def blanks(self):
         temp1 = list(enumerate(self))
