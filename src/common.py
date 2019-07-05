@@ -205,21 +205,25 @@ class StructureBuildingCodelet:
 
 
 class Decay:
-    def __init__(self, content, function=lambda x: x, factor=1):
-       for elem in content:
-           elem.current_activation -= function(.5)*factor
+    def __init__(self, content, function=lambda x: x, factor=.01):
+        #TODO: Ideally use the specified factor if not then decay_rate
+        #TODO:    if not then the default decay rate
+        for elem in content:
+            if hasattr(elem, 'decay_rate'):
+                factor = elem.decay_rate
+            elem.current_activation = function(elem.current_activation-factor)
 
 
 class Learn:
-    def __init__(self, content, factor=1):
-       for elem in content:
-           elem.base_level_activation += .5*factor
+    def __init__(self, content, function=lambda x: x, factor=.01):
+        for elem in content:
+           elem.base_level_activation = function(elem.base_level_activation+factor)
 
 
 class Forget:
-    def __init__(self, content, factor=1):
+    def __init__(self, content, function=lambda x: x, factor=.001):
         for elem in content:
-            elem.base_level_activation -= .01*factor
+            elem.base_level_activation = function(elem.base_level_activation-factor)
 
 
 class GarbageCollector:
