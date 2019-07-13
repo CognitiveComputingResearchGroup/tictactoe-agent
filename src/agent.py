@@ -13,7 +13,8 @@ logger.setLevel(logging.INFO)
 # Number of cognitive cycles to execute (None -> forever)
 N_STEPS = 1000
 
-experimenting = True
+# TODO: can be removed if we figure out logging and another control on graphics.
+experimenting = False
 
 # Module initialization
 #TODO: 'happy' and 'sad' should be interpretive feeling nodes (like 'sweetness' related feeling node)
@@ -40,8 +41,8 @@ workspace = Workspace()
 
 pam = PerceptualAssociativeMemory(initial_concepts=[
                                                     #TODO: affective_valence is really valence
-                                                    FeelingNode("happy", affective_valence=1.0),
-                                                    FeelingNode("sad", affective_valence=-1.0),
+                                                    FeelingNode("happy", valence=1.0),
+                                                    FeelingNode("sad", valence=-1.0),
                                                     ])
 global_workspace = GlobalWorkspace()
 

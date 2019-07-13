@@ -54,21 +54,22 @@ EPSILON = 0.000001
 class SensoryMemory:
     def __init__(self, feature_detectors):
         self.sensory_scene = []
+        self._sensor_data = None
         self._feature_detectors = feature_detectors
 
     def receive_sensors(self, sensors):
 
-        sensory_scene_content = []
-
-        self.sensory_scene = SensoryScene(observation=sensory_scene_content,
-                                          # TODO: outcome is obsolete, remove
-                                          outcome=sensors[1])
+        self._sensor_data = sensors
 
     @property
     def detected_features(self):
         features = []
         for fd in self._feature_detectors:
-            features.append(fd.apply(self.sensory_scene.observation))
+            features.append(fd.apply(self._sensor_data))
+
+        self.sensory_scene = SensoryScene(observation=features,
+                                          # TODO: outcome is obsolete, remove
+                                          outcome=self._sensor_data[1])
 
         return features
 
@@ -245,8 +246,7 @@ class Decay:
 
 class Learn:
     def __init__(self, content, function=lambda x: x, factor=.01):
-        for elem in content:
-           elem.base_level_activation = function(elem.base_level_activation+factor)
+           content.base_level_activation = function(content.base_level_activation+factor)
 
 
 class Forget:
@@ -567,8 +567,8 @@ class ProceduralMemory:
 
         self.activate_schemes(broadcast)
 
-        for scheme in self.receive_selected_behavior:
-            Learn(scheme, match_pct(broadcast.content, scheme.result)*.25)
+        for scheme in self.recently_selected_behaviors:
+            Learn(scheme, factor=match_pct(broadcast.content, scheme.result)*.25)
             if match_pct(broadcast.content, scheme.result) < 1.0:
                 new_scheme = scheme.duplicate()
                 new_scheme.result = broadcast.content
@@ -588,7 +588,7 @@ class ProceduralMemory:
         '''
 
     def receive_selected_behavior(self, behavior):
-        if match_pct(behavior.context, self._last_broadcast) < 1.0:
+        if match_pct(behavior.context, self._last_broadcast.content) < 1.0:
             new_scheme = behavior.duplicate()
             new_scheme.context = self._last_broadcast.content
             recent_behavior = new_scheme
