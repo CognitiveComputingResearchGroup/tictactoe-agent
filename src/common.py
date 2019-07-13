@@ -184,13 +184,17 @@ class CognitiveContent:
 
 class FeelingNode(CognitiveContent):
 
-    def __init__(self, content, affective_valence=0.0, current_activation=0.0, bla=0.0):
+    def __init__(self, content, valence=0.0, current_activation=0.0, bla=0.0):
         CognitiveContent.__init__(self, content, current_activation=current_activation, bla=bla)
-        self.affective_valence = affective_valence
+        self._valence = valence
 
     @property
-    def incentive_salience(self):
-        return self.affective_valence*self.activation
+    def valence(self):
+        return self._valence
+
+    @property
+    def affective_valence(self):
+        return self.valence*self.activation
 
 
 class StructureBuildingCodelet:
