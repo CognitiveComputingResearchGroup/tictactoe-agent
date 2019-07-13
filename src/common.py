@@ -102,6 +102,10 @@ class PerceptualAssociativeMemory:
         self._concepts = initial_concepts
         self.percept_threshold = percept_threshold
 
+    @property
+    def content(self):
+        return self._concepts
+
     def receive_broadcast(self, broadcast):
         pass
 
@@ -252,7 +256,7 @@ class Forget:
 
 
 class GarbageCollector:
-    def __init__(self, module, activation_type='base_level_activation'):
+    def __init__(self, module, removal_activation_type='base_level_activation'):
         if isinstance(module, list):
             content = module
         else:
@@ -261,7 +265,7 @@ class GarbageCollector:
         for elem in content.copy():
             # TODO: replace current activation with activation_type
             # TODO:     'CognitiveContent' object has no attribute 'activation_type'
-            if elem and getattr(elem, activation_type) < EPSILON :
+            if elem and getattr(elem, removal_activation_type) < EPSILON:
                 content.remove(elem)
 
 
@@ -532,6 +536,7 @@ class ProceduralMemory:
         self._schemes = [] if initial_schemes is None else list(initial_schemes)
         self._context_match = context_match
         self._result_match = result_match
+        self._last_broadcast = None
 
         # Activation parameters
         self.activation_threshold = activation_threshold
@@ -552,35 +557,23 @@ class ProceduralMemory:
 
     def activate_schemes(self, broadcast):
         for scheme in self._schemes.copy():
-            if scheme.context is None:
-                new_scheme = scheme.duplicate()
-                new_scheme.current_activation = 1.0
-                new_scheme.context = broadcast.content
-                self._schemes.append(new_scheme)
-            else:
-                scheme.current_activation = match_pct(scheme.context, broadcast.content)
+            scheme.current_activation = match_pct(scheme.context, broadcast.content)
 
     def receive_broadcast(self, broadcast):
         if broadcast is None:
             return
+        else:
+            self._last_broadcast = broadcast
 
         self.activate_schemes(broadcast)
 
-        if isinstance(broadcast.attn_codelets, ExpectationCodelet):
-            scheme = broadcast.attn_codelets.scheme
-
-            #Learn
-            '''
-            Learn([scheme], function=math.tanh,
-                  factor=scheme.current_activation*match_pct(scheme.result, broadcast.content))
-            '''
-
-            #Duplicate
-
-            if scheme.result is None or match_pct(scheme.result, broadcast.content)<1.0:
+        for scheme in self.receive_selected_behavior:
+            Learn(scheme, match_pct(broadcast.content, scheme.result)*.25)
+            if match_pct(broadcast.content, scheme.result) < 1.0:
                 new_scheme = scheme.duplicate()
                 new_scheme.result = broadcast.content
                 self._schemes.append(new_scheme)
+
         ''' 
         def similarity(scheme):
             return self._context_match(scheme, broadcast) + self._result_match(scheme, broadcast)
@@ -595,7 +588,14 @@ class ProceduralMemory:
         '''
 
     def receive_selected_behavior(self, behavior):
-        self.recently_selected_behaviors.append(behavior)
+        if match_pct(behavior.context, self._last_broadcast) < 1.0:
+            new_scheme = behavior.duplicate()
+            new_scheme.context = self._last_broadcast.content
+            recent_behavior = new_scheme
+        else:
+            recent_behavior = behavior
+
+        self.recently_selected_behaviors.append(recent_behavior)
 
     def create_scheme(self, context=None, action=None, result=None):
         return Scheme(context, action, result, current_activation=0.0, base_level_activation=0.2)

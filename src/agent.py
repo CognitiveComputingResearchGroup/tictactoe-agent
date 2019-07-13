@@ -102,7 +102,7 @@ coalition_manager = CoalitionManager()
 removal_activation = {CurrentSituationalModel: 'current_activation',
                       GlobalWorkspace: 'activation',
                       ProceduralMemory: 'base_level_activation',
-                      list: 'base_level_activation'
+                      list: 'base_level_activation' # for attention codelets
                      }
 
 
@@ -176,14 +176,12 @@ def run(environment, n=None, render=True):
 
             # Process selected behavior
             selected_behavior = action_selection.selected_behavior
+
+            procedural_memory.receive_selected_behavior(selected_behavior)
+
             if selected_behavior is not None:
                 # Expectation codelet created from selected behavior
-                if selected_behavior.result is None:
-                    attn_codelets.append(ExpectationCodelet(scheme=selected_behavior,
-                                                            select=lambda x: x.activation > 0.0,
-                                                            tag='exp',
-                                                            domain=workspace.csm.perceptual_scene))
-                else:
+                if selected_behavior.result is not None:
                     attn_codelets.append(ExpectationCodelet(scheme=selected_behavior,
                                                             select=lambda x: x in selected_behavior.result and x.activation > 0.0,
                                                             tag='exp',
@@ -224,6 +222,7 @@ def run(environment, n=None, render=True):
         #housekeeping
         Decay(workspace.csm.content)
         Decay(attn_codelets)
+        Decay(pam.content)
         Forget(procedural_memory.content)
         #Forget(procedural_memory.content, function=lambda x: norm.pdf(x, loc=0.5, scale=0.12)*(1.0/50))
         for module in [workspace.csm, global_workspace, attn_codelets, procedural_memory]:
