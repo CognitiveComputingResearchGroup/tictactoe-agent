@@ -60,12 +60,18 @@ class SensoryMemory:
 
         sensory_scene_content = []
 
-        for fd in self._feature_detectors:
-            sensory_scene_content.append(fd.apply(sensors))
-
         self.sensory_scene = SensoryScene(observation=sensory_scene_content,
                                           # TODO: outcome is obsolete, remove
                                           outcome=sensors[1])
+
+    @property
+    def detected_features(self):
+        features = []
+        for fd in self._feature_detectors:
+            features.append(fd.apply(self.sensory_scene.observation))
+
+        return features
+
 
     @property
     def content(self):
@@ -91,11 +97,26 @@ class FeatureDetector:
 
 
 class PerceptualAssociativeMemory:
-    def __init__(self, initial_concepts):
+    def __init__(self, initial_concepts, percept_threshold=0.8):
+
         self._concepts = initial_concepts
+        self.percept_threshold = percept_threshold
 
     def receive_broadcast(self, broadcast):
         pass
+
+    @property
+    def percept(self):
+        percept = []
+        for concept in self._concepts:
+            if concept.activation > self.percept_threshold:
+                percept.append(concept)
+
+    def receive_features(self, features):
+        for feature in features:
+            for concept in self._concepts:
+                if feature == concept:
+                    concept.current_activation = feature.current_activation
 
     def receive_cue(self, content):
         cued_content = {}

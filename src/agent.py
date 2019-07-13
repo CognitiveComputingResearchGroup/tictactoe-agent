@@ -139,9 +139,13 @@ def run(environment, n=None, render=True):
         #draw(sender=environment, receiver=sensory_memory, content= (obs,reward))
         sensory_memory.receive_sensors((obs, reward))
 
+        pam.receive_features(sensory_memory.detected_features)
+
+
         # Integrate sensory scene into workspace
         workspace.csm.receive_sensory_scene(sensory_memory.sensory_scene)
 
+        workspace.csm.receive_content(pam.percept)
         '''
         # Structure building codelets scan the workspace, potentially creating new content
         sbc_content = []
