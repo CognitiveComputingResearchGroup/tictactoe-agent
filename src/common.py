@@ -1,9 +1,11 @@
 import collections
 import random
+import math
 
 import numpy as np
 from scipy.special import expit as sigmoid
 from scipy.special import softmax
+from scipy.stats import norm
 
 def recursive_repr_parse(content):
     if isinstance(content, list):
@@ -29,6 +31,21 @@ def recursive_str_parse(content):
     else:
         return str(content)
 
+def match_pct(content1, content2):
+    '''
+    Returns how much the two content match/ are similar.
+    :param content1:
+    :param content2:
+    :return: pct: percentage of match 0.0<=pct<=1.0
+    '''
+    if content1 is None or content2 is None:
+        match = 0
+    else:
+        intersection = set(content1).intersection(set(content2))
+        union = set(content1).union(set(content2))
+        match = float(len(intersection))/len(union)
+    return match
+
 
 SensoryScene = collections.namedtuple('SensoryScene', ['observation', 'outcome'])
 
@@ -37,17 +54,25 @@ EPSILON = 0.000001
 class SensoryMemory:
     def __init__(self, feature_detectors):
         self.sensory_scene = []
+        self._sensor_data = None
         self._feature_detectors = feature_detectors
 
     def receive_sensors(self, sensors):
 
-        sensory_scene_content = []
+        self._sensor_data = sensors
 
+    @property
+    def detected_features(self):
+        features = []
         for fd in self._feature_detectors:
-            sensory_scene_content.append(fd.apply(sensors))
+            features.append(fd.apply(self._sensor_data))
 
-        self.sensory_scene = SensoryScene(observation=sensory_scene_content,
-                                          outcome=sensors[1])
+        self.sensory_scene = SensoryScene(observation=features,
+                                          # TODO: outcome is obsolete, remove
+                                          outcome=self._sensor_data[1])
+
+        return features
+
 
     @property
     def content(self):
@@ -69,50 +94,67 @@ class FeatureDetector:
 
     def apply(self, content):
         return CognitiveContent(self._concept,
-                                activation=self._similarity_metric(content))
+                                current_activation=self._similarity_metric(content))
 
 
 class PerceptualAssociativeMemory:
-    def __init__(self, initial_concepts):
+    def __init__(self, initial_concepts, percept_threshold=0.8):
+
         self._concepts = initial_concepts
+        self.percept_threshold = percept_threshold
+
+    @property
+    def content(self):
+        return self._concepts
 
     def receive_broadcast(self, broadcast):
         pass
 
+    @property
+    def percept(self):
+        percept = []
+        for concept in self._concepts:
+            if concept.activation > self.percept_threshold:
+                percept.append(concept)
+
+    def receive_features(self, features):
+        for feature in features:
+            for concept in self._concepts:
+                if feature == concept:
+                    concept.current_activation = feature.current_activation
+
     def receive_cue(self, content):
-        cued_content = []
+        cued_content = {}
 
         if content is None:
             return None
 
         #TODO: check if content is iterable
 
-        for elem in content:
-            if elem in self._concepts:
-                cued_content.extend([concept for concept in self._concepts if elem == concept])
-
+        #TODO: Need to look at a broader definition of cueing and approximate matching
+        cued_content = [concept for concept in self._concepts if content == concept]
 
         # Recognize winning board (add feeling node with positive affective valence)
 
         # Recognize losing board (add feeling node with negative affective valence)
 
-        return None
+        return cued_content
 
 
 class CognitiveContent:
 
-    def __init__(self, content, affective_valence=0.0, activation=0.0):
+    def __init__(self, content, current_activation=0.0, bla=0.0,
+                 current_incentive_salience=0.0, blis=0.0):
         self.content = content
 
         # Activation and Incentive Salience Parameters
-        self.base_level_activation = 0.0
-        self.base_level_incentive_salience = 0.0
-        self.current_activation = activation
-        self.current_incentive_salience = 0.0
+        self.base_level_activation = bla
+        self.base_level_incentive_salience = blis
+        self.current_activation = current_activation
+        self.current_incentive_salience = current_incentive_salience
 
         # Affective Valence Sign (either +1.0 or -1.0 when set)
         # --- only used for feeling nodes
-        self.affective_valence = affective_valence
 
         # Metadata
         self.virtual = False
@@ -128,8 +170,8 @@ class CognitiveContent:
         return self._current_activation
 
     @current_activation.setter
-    def current_activation(self, curr_act):
-        self._current_activation = curr_act
+    def current_activation(self, current_activation):
+        self._current_activation = current_activation
 
     @property
     def base_level_activation(self):
@@ -162,6 +204,25 @@ class CognitiveContent:
     def __eq__(self, other):
         return self.content == other.content if hasattr(other, "content") else False
 
+    def __hash__(self):
+        return hash(self.content)
+
+
+class FeelingNode(CognitiveContent):
+
+    def __init__(self, content, valence=0.0, current_activation=0.0, bla=0.0):
+        CognitiveContent.__init__(self, content, current_activation=current_activation, bla=bla)
+        self._valence = valence
+
+    @property
+    def valence(self):
+        return self._valence
+
+    @property
+    def affective_valence(self):
+        return self.valence*self.activation
+
+
 class StructureBuildingCodelet:
     def __init__(self, select=lambda x: True, transform=lambda x: x, id=None):
         self._select = select
@@ -172,25 +233,66 @@ class StructureBuildingCodelet:
     def apply(self, workspace):
         return list(map(self._transform, filter(self._select, workspace.csm)))
 
+
 class Decay:
-    def __init__(self, content):
-       for elem in content:
-           elem.current_activation -= .5
+    def __init__(self, content, function=lambda x: x, factor=.01):
+        #TODO: Ideally use the specified factor if not then decay_rate
+        #TODO:    if not then the default decay rate
+        for elem in content:
+            if hasattr(elem, 'decay_rate'):
+                factor = elem.decay_rate
+            elem.current_activation = function(elem.current_activation-factor)
+
+
+class Learn:
+    def __init__(self, content, function=lambda x: x, factor=.01):
+           content.base_level_activation = function(content.base_level_activation+factor)
+
+
+class Forget:
+    def __init__(self, content, function=lambda x: x, factor=.001):
+        for elem in content:
+            elem.base_level_activation = function(elem.base_level_activation-factor)
+
 
 class GarbageCollector:
-    def __init__(self, module, activation_type=CognitiveContent.base_level_activation):
-        for elem in module.content.copy():
+    def __init__(self, module, removal_activation_type='base_level_activation'):
+        if isinstance(module, list):
+            content = module
+        else:
+            content = module.content
+
+        for elem in content.copy():
             # TODO: replace current activation with activation_type
             # TODO:     'CognitiveContent' object has no attribute 'activation_type'
-            if elem and activation_type.__get__(elem) < EPSILON :
-                module.content.remove(elem)
+            if elem and getattr(elem, removal_activation_type) < EPSILON:
+                content.remove(elem)
+
+
+def merge_cue(cue, contents):
+    if len(cue[1]) > 0:
+        contents.remove(cue[0])
+        contents.extend(cue[1])
+
+    # TODO: Need to replace modifying activation here by
+    # TODO:  modifying activation in PAM while cueing
+    for elem in cue[1]:
+        elem.current_activation = cue[0].current_activation
+
+
+class PerceptualScene:
+    def __init__(self, content):
+        self.content = content
+
+    def receive_cued_content(self, cue):
+        merge_cue(cue, self.content)
 
 
 class CurrentSituationalModel:
     def __init__(self):
         self._content = []
 
-        self.perceptual_scene = None
+        self.perceptual_scene = PerceptualScene([])
 
     def receive_content(self, content):
 
@@ -198,6 +300,9 @@ class CurrentSituationalModel:
             return
 
         self._content.extend(content)
+
+    def receive_cued_content(self, cue):
+        merge_cue(cue, self.content)
 
     @property
     def content(self):
@@ -213,6 +318,7 @@ class CurrentSituationalModel:
         # TODO: On calling receive_sensory_scene, the content from the sensory_scene should be integrated
         # TODO: Into the perceptual scene, not overwrite it
         self.receive_content(scene.observation)
+        self.perceptual_scene.content = scene.observation
 
     def __iter__(self):
         return iter(self._content)
@@ -235,27 +341,89 @@ class CueingProcess:
     def __init__(self, cueable_modules=None):
         self.cueable_modules = cueable_modules or []
 
+    def cue_for(self, cuee):
+        update_for_perceptual_scene = []
+        for content in cuee.content:
+            for module in self.cueable_modules:
+                cued_content = module.receive_cue(content)
+                if cued_content is not None:
+                    #TODO: merge_cue and CSM.receive_cued_content do the same thing
+                    #TODO: merge cue allows reusability. Need to make code consistent
+                    update_for_perceptual_scene.append([content, cued_content])
+
+        for elem in update_for_perceptual_scene:
+            merge_cue(elem, cuee.content)
+
     def process(self, workspace):
         # TODO: Currently implemented as 2 passes: 1 for perceptual scene and
         # another for generated content in the csm.  Need to rethink this later.
-        for module in self.cueable_modules:
-            module.receive_cue(workspace.csm.perceptual_scene)
 
-        for content in workspace.csm:
-            for module in self.cueable_modules:
-                cued_content = module.receive_cue(content)
+        cue = self.cue_for(workspace.csm.perceptual_scene)
+        if cue is not None:
+            for elem in cue:
+                merge_cue(elem, workspace.csm.perceptual_scene)
 
-                if cued_content is not None:
-                    workspace.csm.receive_cue([content, cued_content])
+        cue = self.cue_for(workspace.csm)
+        if cue is not None:
+            for elem in cue:
+                merge_cue(elem, workspace.csm)
 
 
 class AttentionCodelet:
-    def __init__(self, select=lambda x: True, tag=''):
+    def __init__(self, select=lambda x: True, tag='', domain=None,
+                 current_activation=0.0, base_level_activation=1.0,
+                 ):
         self.tag = tag
         self._select = select
 
-    def apply(self, workspace):
-        return list(filter(self._select, workspace.csm.content))
+        if domain is None:
+            raise TypeError
+
+        self.domain = domain
+
+        self._current_activation = current_activation
+        self._base_level_activation = base_level_activation
+
+    def apply(self):
+        #TODO: Need to figure out what to do when we have multiple elements in domain
+        return list(filter(self._select, self.domain.content))
+
+    @property
+    def activation(self):
+        return self.current_activation + self.base_level_activation
+
+    @property
+    def current_activation(self):
+        return self._current_activation
+
+    @current_activation.setter
+    def current_activation(self, value):
+        self._current_activation = value
+
+    @property
+    def base_level_activation(self):
+        return self._base_level_activation
+
+    def __repr__(self):
+        return self.tag
+
+
+class ExpectationCodelet(AttentionCodelet):
+    def __init__(self, scheme, select=lambda x: True, tag='', domain=[]):
+        AttentionCodelet.__init__(self, select, tag, current_activation=1.0, domain=domain)
+        self.scheme = scheme
+
+    @property
+    def base_level_activation(self):
+        return self.current_activation
+
+    @base_level_activation.setter
+    def base_level_activation(self, value):
+        self._current_activation = value
+
+    @property
+    def decay_rate(self):
+        return 0.5
 
 
 class Coalition:
@@ -271,7 +439,11 @@ class Coalition:
         # TODO: (1) base-level-activation (of attn codelet)
         # TODO: (2) similarity of content to attn codelet's concerns
         # TODO: (3) salience of cognitive content in structure
-        return sum([elem.salience for elem in self.content])
+        return sum([elem.salience for elem in self.content])+self.attn_codelets.activation
+
+    @property
+    def incentive_salience(self):
+        return sum([elem.incentive_salience for elem in self.content])
 
     def __repr__(self):
         return recursive_repr_parse(self)
@@ -289,17 +461,16 @@ class CoalitionManager:
         if content is None or len(content) == 0:
             return
 
-        self._candidates.append(Coalition(content, attn_codelet))
+        coalition = Coalition(content, attn_codelet)
+
+        self._candidates.append(coalition)
+
+        return
 
     @property
     def coalitions(self):
         # TODO: add more sophisticated implementation based on shared content / concerns
         coalitions = self._candidates
-        #new_content = []
-        #for coalition in self._candidates:
-        #    if coalition.activation > .99:
-        #        new_content.extend(coalition.content)
-        #coalitions.append(Coalition(new_content, AttentionCodelet(lambda x: True)))
         self._candidates=[]
         return coalitions
 
@@ -336,7 +507,7 @@ Action = collections.namedtuple('Action', ['type', 'value'])
 
 
 class Scheme:
-    def __init__(self, context=None, action=None, result=None, current_activation=0.0, base_level_activation=0.0):
+    def __init__(self, context=None, action=None, result=None, current_activation=0.0, base_level_activation=0.5):
         self.context = context
         self.action = action
         self.result = result
@@ -348,6 +519,15 @@ class Scheme:
     def activation(self):
         return self.current_activation + self.base_level_activation
 
+    def duplicate(self):
+        return self.__class__(context=self.context,
+                              action=self.action,
+                              result=self.result,
+                              current_activation=self.current_activation,
+                              base_level_activation=self.base_level_activation)
+
+    def __repr__(self):
+        return '<'+str([str(self.context),str(self.action),str(self.result)])+':'+str(self.base_level_activation)+'>'
 
 class ProceduralMemory:
 
@@ -356,6 +536,7 @@ class ProceduralMemory:
         self._schemes = [] if initial_schemes is None else list(initial_schemes)
         self._context_match = context_match
         self._result_match = result_match
+        self._last_broadcast = None
 
         # Activation parameters
         self.activation_threshold = activation_threshold
@@ -374,10 +555,26 @@ class ProceduralMemory:
 
         return candidate_behaviors
 
+    def activate_schemes(self, broadcast):
+        for scheme in self._schemes.copy():
+            scheme.current_activation = match_pct(scheme.context, broadcast.content)
+
     def receive_broadcast(self, broadcast):
         if broadcast is None:
             return
+        else:
+            self._last_broadcast = broadcast
 
+        self.activate_schemes(broadcast)
+
+        for scheme in self.recently_selected_behaviors:
+            Learn(scheme, factor=match_pct(broadcast.content, scheme.result)*.25)
+            if match_pct(broadcast.content, scheme.result) < 1.0:
+                new_scheme = scheme.duplicate()
+                new_scheme.result = broadcast.content
+                self._schemes.append(new_scheme)
+
+        ''' 
         def similarity(scheme):
             return self._context_match(scheme, broadcast) + self._result_match(scheme, broadcast)
 
@@ -388,9 +585,17 @@ class ProceduralMemory:
             self._schemes[index].current_activation = activation
 
         self._learn(broadcast)
+        '''
 
     def receive_selected_behavior(self, behavior):
-        self.recently_selected_behaviors.append(behavior)
+        if match_pct(behavior.context, self._last_broadcast.content) < 1.0:
+            new_scheme = behavior.duplicate()
+            new_scheme.context = self._last_broadcast.content
+            recent_behavior = new_scheme
+        else:
+            recent_behavior = behavior
+
+        self.recently_selected_behaviors.append(recent_behavior)
 
     def create_scheme(self, context=None, action=None, result=None):
         return Scheme(context, action, result, current_activation=0.0, base_level_activation=0.2)
@@ -399,6 +604,10 @@ class ProceduralMemory:
 
         # TODO: Need to compare broadcast to results in recently selected behaviors
         pass
+
+    @property
+    def content(self):
+        return self._schemes
 
 
 def exact_match_by_board(content, scheme):
@@ -433,7 +642,16 @@ class ActionSelection:
 
         # TODO: need more sophisticated action selection that includes incentive salience of results
         # TODO: to determine the most "valueable" action to choose.
-        return max(self.behaviors, key=lambda c: c.activation)
+        def value_function(behavior):
+            value = behavior.activation
+            if behavior.result is not None:
+                value += sum([elem.incentive_salience for elem in behavior.result])
+            return value
+
+        max_value = value_function(max(self.behaviors, key=lambda b: value_function(b)))
+        selected_behavior = np.random.choice([behavior for behavior in self.behaviors
+                                              if value_function(behavior) == max_value])
+        return selected_behavior
 
 
 MotorCommand = collections.namedtuple('MotorCommand', ['actuator', 'value'])

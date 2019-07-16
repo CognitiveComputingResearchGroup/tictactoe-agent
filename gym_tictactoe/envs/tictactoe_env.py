@@ -8,6 +8,7 @@ from gym import spaces
 from gym_tictactoe.envs import graphics as ttt_graphics
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)
 
 
 class TicTacToeEnv(gym.Env):
@@ -134,6 +135,13 @@ class Board(object):
         self._board = np.array([BLANK] * (self.size ** 2))
 
         self._mark_dict = {BLANK: ' ', X: 'X', O: 'O'}
+
+    @classmethod
+    def from_list(cls, board):
+        obj = Board(int(len(board)**.5))
+        obj._board = board
+        return obj
+
 
     @property
     def blanks(self):
